@@ -1,0 +1,4 @@
+1
+https://raw.githubusercontent.com/mrraketa/rovny-fps/main/RovnyFPS.exe
+d8a84b46a57625738845f63671d42f04bb7eb6dd06bbde8421cbc92f9a0f8e03
+Первая версия
