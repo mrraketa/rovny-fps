@@ -37,6 +37,7 @@ namespace RovnyFps
         public Dictionary<string, string> Orig = new Dictionary<string, string>(); // "appid|account" -> прежние LaunchOptions ("-" = не было)
         public List<string> Custom = new List<string>();
         public HashSet<string> Ssync = new HashSet<string>();                      // «Без разрывов» (Scanline Sync)
+        public bool ZamerIgr;                                                       // «Замер в игре»: мерить каждую катку в фоне
         string path;
 
         public static State Load(string path)
@@ -55,6 +56,7 @@ namespace RovnyFps
                     else if (p[0] == "orig" && p.Length >= 3) s.Orig[p[1]] = p[2];
                     else if (p[0] == "custom" && p.Length >= 2) s.Custom.Add(p[1]);
                     else if (p[0] == "ssync" && p.Length >= 2) s.Ssync.Add(p[1]);
+                    else if (p[0] == "zamer_igr") s.ZamerIgr = true;
                 }
                 catch (Exception) { } // битая строка — пропускаем, остальное читаем
             }
@@ -69,6 +71,7 @@ namespace RovnyFps
             foreach (var kv in Orig) sb.Append("orig\t" + kv.Key + "\t" + kv.Value + "\n");
             foreach (var c in Custom) sb.Append("custom\t" + c + "\n");
             foreach (var k in Ssync) sb.Append("ssync\t" + k + "\n");
+            if (ZamerIgr) sb.Append("zamer_igr\n");
             Disk.Write(path, sb.ToString(), new UTF8Encoding(false));
         }
     }
@@ -1471,7 +1474,10 @@ namespace RovnyFps
         readonly Label value = new Label(), hint = new Label(), sub = new Label(), section = new Label();
         readonly LinkLabel other = new LinkLabel(), support = new LinkLabel(), podbor = new LinkLabel(), proverka = new LinkLabel(), zhurnal = new LinkLabel();
         bool pmOtkaz;   // отказался качать PresentMon или он не скачался — мерим буфером RivaTuner
-        CancellationTokenSource podborStop;   // не null — идёт подбор лимита, главная кнопка его отменяет
+        CancellationTokenSource podborStop;
+        readonly LinkLabel vIgre = new LinkLabel();   // «Замер в игре: вкл/выкл»
+        readonly System.Windows.Forms.Timer sledit = new System.Windows.Forms.Timer();
+        Katka katka;   // не null — идёт подбор лимита, главная кнопка его отменяет
         readonly StatusLine status = new StatusLine();
         readonly Btn upd = new Btn(Btn.Kind.Chip);   // «Обновить до версии N» — видна, только когда есть новая (Obnovlenie.cs)
         Obnovlenie.Est novoe;
@@ -1517,6 +1523,16 @@ namespace RovnyFps
             support.AccessibleName = "Поддержать автора на Boosty";
             support.Location = new Point(S(398) - TextRenderer.MeasureText(support.Text, Ui.Small).Width, S(390));
             support.LinkClicked += delegate { try { Process.Start(Program.SupportUrl); } catch { } };
+
+            // замер во время игры: включил один раз — дальше каждая катка мерится сама
+            vIgre.Font = Ui.Small; vIgre.AutoSize = true;
+            vIgre.LinkColor = Ui.Muted; vIgre.ActiveLinkColor = Ui.Txt; vIgre.VisitedLinkColor = Ui.Muted;
+            vIgre.LinkBehavior = LinkBehavior.HoverUnderline; vIgre.Cursor = Cursors.Hand;
+            vIgre.Location = new Point(S(22) + TextRenderer.MeasureText(other.Text, Ui.Small).Width + S(14), S(390));
+            vIgre.LinkClicked += delegate { PereklyuchitVIgre(); };
+            sledit.Interval = 3000;
+            sledit.Tick += delegate { SleditZaIgroy(); };
+            sledit.Start();
 
             // журнал шагов для разбора сбоев — показать файл в Проводнике, его можно переслать
             zhurnal.Text = "Журнал"; zhurnal.Font = Ui.Small; zhurnal.AutoSize = true;
@@ -1583,7 +1599,7 @@ namespace RovnyFps
             upd.Selected = true; upd.Visible = false;
             upd.Click += delegate { Obnovit(); };
 
-            Controls.AddRange(new Control[] { sub, list, other, support, zhurnal, section, proverka, podbor, minus, value, plus, hint, main, off, status, upd, ssync });
+            Controls.AddRange(new Control[] { sub, list, other, vIgre, support, zhurnal, section, proverka, podbor, minus, value, plus, hint, main, off, status, upd, ssync });
             SetFps(60);
             UpdateButtons();
 
@@ -1784,6 +1800,8 @@ namespace RovnyFps
             hint.Text = ss ? "Кадры под экран " + hz + " Гц, без полосы разрыва. Нужен запас FPS."
                            : "Чуть ниже FPS, который игра держит в драках. Экран: " + hz + " Гц";
             podbor.Enabled = proverka.Enabled = g != null && !busy && !blocked;
+            vIgre.Text = "Замер в игре: " + (core.St.ZamerIgr ? (katka != null && katka.Idet ? "идёт" : "вкл") : "выкл");
+            vIgre.AccessibleName = "Замер во время игры — " + (core.St.ZamerIgr ? "включён" : "выключен");
             if (busy) return;
             string warn = g != null ? Core.WarningFor(g) : null;
             if (g == null) status.Show(Loaded ? "" : "", StatusLine.Tone.Info);
@@ -1796,6 +1814,42 @@ namespace RovnyFps
             else if (warn != null) status.Show(warn, StatusLine.Tone.Warn);
             else if (otherUser) status.Show("Окно открыто от имени другого пользователя.", StatusLine.Tone.Warn);
             else status.Show("", StatusLine.Tone.Info);
+        }
+
+        async void PereklyuchitVIgre()
+        {
+            if (!core.St.ZamerIgr && !Zamer.PmEst)
+            {
+                // фоновый замер — только PresentMon: буфер RivaTuner под своим лимитом приукрашивает
+                if (MessageBox.Show(this, "Для замера во время игры нужна бесплатная программа PresentMon от Intel (около 1 МБ, с GitHub).\n\nСкачать PresentMon?",
+                        "Ровный FPS", MessageBoxButtons.YesNo, MessageBoxIcon.Information) != DialogResult.Yes) return;
+                status.Show("Скачиваю PresentMon…", StatusLine.Tone.Info);
+                string oshibka = null;
+                try { await Task.Run(() => Zamer.SkachatPm()); }
+                catch (Exception ex) { oshibka = ex.Message; Zhurnal.Pishi("PresentMon не скачался: " + ex); }
+                if (oshibka != null) { status.Show(oshibka, StatusLine.Tone.Error); return; }
+            }
+            core.St.ZamerIgr = !core.St.ZamerIgr;
+            core.St.Save();
+            Zhurnal.Pishi("замер в игре: " + (core.St.ZamerIgr ? "включён" : "выключен"));
+            if (!core.St.ZamerIgr && katka != null) katka.Ostanovit();
+            status.Show(core.St.ZamerIgr ? "Замер в игре включён: каждая катка включённой игры мерится сама, итог — после выхода из игры." : "Замер в игре выключен.", StatusLine.Tone.Info);
+            Refresh2();
+        }
+
+        // Раз в 3 с: включённая игра запущена — начать замер катки; итог придёт, когда игра закроется
+        void SleditZaIgroy()
+        {
+            if (!core.St.ZamerIgr || !Zamer.PmEst || games == null) return;
+            if (katka != null) { if (katka.Idet) return; katka = null; }
+            var g = games.FirstOrDefault(x => core.St.On.ContainsKey(x.Key) && core.Running(x));
+            if (g == null) return;
+            katka = Katka.Nachat(g, itog => BeginInvoke((Action)(() =>
+            {
+                if (itog != null && !busy) status.Show(itog, StatusLine.Tone.Ok);
+                Refresh2();
+            })));
+            Refresh2();
         }
 
         void PereklyuchitSsync()
@@ -2014,7 +2068,7 @@ namespace RovnyFps
 
         // Обновления (Obnovlenie.cs): номер этой сборки и манифест в открытом репозитории.
         // Выпустить новую версию — vypustit.ps1 рядом (сам поднимает номер).
-        public const int Versiya = 6;
+        public const int Versiya = 7;
         public const string ManifestUrl = "https://raw.githubusercontent.com/mrraketa/rovny-fps/main/versiya.txt";
         public const string SupportUrl = "https://boosty.to/raketo4ka/donate";
 

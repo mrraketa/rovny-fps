@@ -8,4 +8,4 @@ set OUT=%1
 if "%OUT%"=="" set OUT=RovnyFPS.exe
 "%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /nologo /target:winexe /platform:anycpu /optimize+ /codepage:65001 /define:VSTRAIVANIE ^
   /win32icon:znachok\app.ico /resource:znachok\logo64.png,logo64.png ^
-  /out:%OUT% /r:System.Management.dll /r:System.Windows.Forms.dll /r:System.Drawing.dll RovnyFPS.cs Vstraivanie.cs Obnovlenie.cs Zamer.cs
+  /out:%OUT% /r:System.Management.dll /r:System.Windows.Forms.dll /r:System.Drawing.dll RovnyFPS.cs Vstraivanie.cs Obnovlenie.cs Zamer.cs Katka.cs
