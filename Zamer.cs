@@ -16,7 +16,8 @@ namespace RovnyFps
     {
         public int Kadrov;
         public double Sredniy, Low1, Low01, RyvkovVMin;
-        public int Poverh;            // секунд, когда поверх игры было окно или оверлей — такие кадры не считались
+        public int Poverh;
+        public bool CherezWindows;    // игра всё время выводила кадры через Windows (оконный режим или оверлей)            // секунд, когда поверх игры было окно или оверлей — такие кадры не считались
         public double Derzhit;        // FPS, который игра держит постоянно: 5-й процентиль по полусекундам
         public bool Tochno;           // true — PresentMon; false — буфер RivaTuner (под своим лимитом ровнее, чем есть)
         public static string Chislo(double v) { return v.ToString(v >= 100 ? "0" : "0.#", System.Globalization.CultureInfo.GetCultureInfo("ru-RU")); }
@@ -189,7 +190,8 @@ namespace RovnyFps
         public static string PmPath { get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "RovnyFPS", "PresentMon-2.6.0-x64.exe"); } }
         public static bool PmEst { get { return File.Exists(PmPath); } }
         public static string PoslednijCsv;
-        public static int PoverhSekund;      // последний замер: сколько секунд кадры шли через Windows поверх игры (не считались)   // первый столбец строк с кадрами — pid окна впереди в момент чтения
+        public static int PoverhSekund;
+        public static bool VesCherezWindows;  // последний замер: игра всё время выводила кадры через Windows (окно, оверлей) — так и мерили      // последний замер: сколько секунд кадры шли через Windows поверх игры (не считались)   // первый столбец строк с кадрами — pid окна впереди в момент чтения
 
         public static void SkachatPm()
         {
@@ -236,18 +238,24 @@ namespace RovnyFps
                 try
                 {
                     string[] head = null; int cPid = -1, cFt = -1, cLat = -1, cMode = -1;
-                    double poverh = 0;
-                    long front = 0; DateTime t = DateTime.UtcNow, hod = DateTime.UtcNow;
+                    // Кадры «через Windows» (PresentMode «Composed…») копим отдельно. Короткие куски на фоне прямого вывода —
+                    // оверлей поверх игры, их выбрасываем (04.11 у него 40 FPS вместо 289 → лимит 35). Но у друга 04.11 игра
+                    // ВСЁ время шла через Windows (оконный режим) — выброс всех кадров дал «0 из 120» навсегда. Поэтому:
+                    // прямых кадров меньше 15 с — это обычный режим игры, считаем всё.
+                    var vse = new List<int>(); var cherez = new List<bool>();
+                    long frontPryamo = 0, frontVse = 0, porog = 15000, predel = sekund * 4000L;
+                    DateTime t = DateTime.UtcNow, hod = DateTime.UtcNow;
                     int strok = 0, neVperedi = 0;
                     string line;
-                    while (front < sekund * 1000L && (line = p.StandardOutput.ReadLine()) != null)
+                    Func<bool> hvatit = () => frontPryamo >= sekund * 1000L || (frontVse >= sekund * 1000L && frontPryamo < porog) || frontVse >= predel;
+                    while (!hvatit() && (line = p.StandardOutput.ReadLine()) != null)
                     {
                         stop.ThrowIfCancellationRequested();
                         strok++;
                         if ((DateTime.UtcNow - hod).TotalSeconds >= 15)
                         {
                             hod = DateTime.UtcNow;
-                            Zhurnal.Pishi("PresentMon: строк " + strok + ", кадров в зачёт " + kadry.Count + ", окно игры не впереди " + neVperedi + ", поверх игры " + (int)(poverh / 1000) + " с, набрано " + front / 1000 + " с");
+                            Zhurnal.Pishi("PresentMon: строк " + strok + ", кадров " + vse.Count + ", окно игры не впереди " + neVperedi + ", напрямую " + frontPryamo / 1000 + " с, через Windows " + (frontVse - frontPryamo) / 1000 + " с");
                         }
                         var f = line.Split(',');
                         syroe.WriteLine((head == null ? "" : (ForegroundPid().ToString() + ",")) + line);
@@ -270,29 +278,36 @@ namespace RovnyFps
                         // уведомление). Игра тогда сама идёт медленнее: 04.11 в Deadlock 40 FPS вместо 289, почти 5 минут
                         // подряд — и подбор поставил лимит 35. Такие кадры в замер не берём.
                         bool cherezWindows = cMode >= 0 && cMode < f.Length && f[cMode].StartsWith("Composed");
-                        if (cherezWindows)
-                        {
-                            double pm;
-                            if (double.TryParse(f[cFt], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out pm) && pm > 0) poverh += pm;
-                        }
-                        else if (ForegroundPid() == pid)
+                        if (ForegroundPid() == pid)
                         {
                             if (double.TryParse(f[cFt], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out ms) && ms > 0)
-                                kadry.Add((int)(ms * 1000));
+                            {
+                                vse.Add((int)(ms * 1000)); cherez.Add(cherezWindows);
+                                long dt = Math.Min(1000, (long)(now - t).TotalMilliseconds);
+                                frontVse += dt; if (!cherezWindows) frontPryamo += dt;
+                            }
                             double lat;
                             if (cLat >= 0 && cLat < f.Length && double.TryParse(f[cLat], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out lat) && lat > 0)
                                 zaderzhki.Add(lat);
-                            front += Math.Min(1000, (long)(now - t).TotalMilliseconds);
-                            progress((int)(front / 1000));
+                            // ход — по тому, что пойдёт в зачёт
+                            progress((int)((frontPryamo >= porog ? frontPryamo : frontVse) / 1000));
                         }
                         else neVperedi++;
                         t = now;
                     }
-                    PoverhSekund = (int)(poverh / 1000);
-                    Zhurnal.Pishi("PresentMon: конец, строк " + strok + ", кадров в зачёт " + kadry.Count + ", не впереди " + neVperedi + ", поверх " + PoverhSekund + " с" +
+                    VesCherezWindows = frontPryamo < porog;
+                    if (VesCherezWindows) { kadry.AddRange(vse); PoverhSekund = 0; }
+                    else
+                    {
+                        for (int i = 0; i < vse.Count; i++) if (!cherez[i]) kadry.Add(vse[i]);
+                        PoverhSekund = (int)((frontVse - frontPryamo) / 1000);
+                    }
+                    Zhurnal.Pishi("PresentMon: конец, строк " + strok + ", кадров в зачёт " + kadry.Count + ", не впереди " + neVperedi +
+                        ", напрямую " + frontPryamo / 1000 + " с, через Windows " + (frontVse - frontPryamo) / 1000 + " с" +
+                        (VesCherezWindows ? " — игра всё время через Windows, считаю всё" : " — кадры через Windows не считаю") +
                         (p.HasExited ? ", PresentMon вышел сам с кодом " + p.ExitCode : ""));
                     stop.ThrowIfCancellationRequested();
-                    if (front < sekund * 1000L && kadry.Count < 100) throw new IOException("Игра закрылась раньше, чем закончился замер.");
+                    if (frontVse < sekund * 1000L && kadry.Count < 100) throw new IOException("Игра закрылась раньше, чем закончился замер.");
                 }
                 finally
                 {

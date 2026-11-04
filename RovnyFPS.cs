@@ -1880,7 +1880,8 @@ namespace RovnyFps
                 catch (OperationCanceledException) { }   // лимит уже стоит; проверку можно пропустить
                 int poverh = bez.Poverh + (s != null ? s.Poverh : 0);
                 itog = "Без лимита: 1% low " + Itog.Chislo(bez.Low1) + ", рывков " + Itog.Chislo(bez.RyvkovVMin) + " в минуту" +
-                       (poverh > 10 ? " (оверлей поверх игры " + poverh + " с — не считал)" : "") + ".\n" +
+                       (poverh > 10 ? " (оверлей поверх игры " + poverh + " с — не считал)" : "") +
+                       (bez.CherezWindows ? " (кадры через Windows — окно или оверлей)" : "") + ".\n" +
                        (s == null ? "Поставил лимит " + lim + "." :
                         "С лимитом " + lim + ": 1% low " + Itog.Chislo(s.Low1) + ", рывков " + Itog.Chislo(s.RyvkovVMin) + " в минуту" + ".");
             }
@@ -1921,6 +1922,7 @@ namespace RovnyFps
                        (s.Tochno ? "" : " (через RivaTuner — точнее с PresentMon)");
                 // 1% low заметно ниже лимита — компьютер его в тяжёлых местах не держит
                 if (s.Poverh > 10) itog += " Оверлей поверх игры " + s.Poverh + " с — не считал.";
+                if (s.CherezWindows) itog += " Игра выводит кадры через Windows (окно или оверлей) — в полноэкранном режиме обычно ровнее.";
                 if (s.Low1 < lim * 0.95) { itog += "\nНе держит: поставь ниже или нажми «Подобрать по замеру»."; tone = StatusLine.Tone.Warn; }
                 else itog += "\nДержит ровно.";
             }
@@ -1998,6 +2000,7 @@ namespace RovnyFps
             if (it == null) throw new Exception("Кадров слишком мало — замер не получился, попробуй ещё раз.");
             it.Tochno = pm;
             it.Poverh = pm ? Zamer.PoverhSekund : 0;
+            it.CherezWindows = pm && Zamer.VesCherezWindows;
             // Задержку мыши не показываем: AllInputToPhotonLatency в Deadlock 04.11 вышла 5 мс при 60 FPS (меньше кадра —
             // не верю), а DisplayLatency одинакова у RivaTuner и у лимита игры (19,0 и 19,6 мс) — цену лимита не различает.
             // Сырые столбцы остаются в CSV замера (zamery\).
@@ -2011,7 +2014,7 @@ namespace RovnyFps
 
         // Обновления (Obnovlenie.cs): номер этой сборки и манифест в открытом репозитории.
         // Выпустить новую версию — vypustit.ps1 рядом (сам поднимает номер).
-        public const int Versiya = 4;
+        public const int Versiya = 5;
         public const string ManifestUrl = "https://raw.githubusercontent.com/mrraketa/rovny-fps/main/versiya.txt";
         public const string SupportUrl = "https://boosty.to/raketo4ka/donate";
 
