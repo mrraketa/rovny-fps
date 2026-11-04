@@ -16,7 +16,8 @@ namespace RovnyFps
     {
         public int Kadrov;
         public double Sredniy, Low1, Low01, RyvkovVMin;
-        public double? ZaderzhkaMs;   // от мыши до экрана, медиана; только из PresentMon
+        public int Poverh;            // секунд, когда поверх игры было окно или оверлей — такие кадры не считались
+        public double Derzhit;        // FPS, который игра держит постоянно: 5-й процентиль по полусекундам
         public bool Tochno;           // true — PresentMon; false — буфер RivaTuner (под своим лимитом ровнее, чем есть)
         public static string Chislo(double v) { return v.ToString(v >= 100 ? "0" : "0.#", System.Globalization.CultureInfo.GetCultureInfo("ru-RU")); }
     }
@@ -122,7 +123,16 @@ namespace RovnyFps
             double sum = kadry.Sum(x => (double)x), med = s[s.Count / 2];
             Func<double, double> low = share => 1e6 / s[Math.Min(s.Count - 1, (int)(s.Count * (1 - share)))];
             int ryvki = kadry.Count(x => x > 2 * med);   // кадр дольше двух обычных — заметная запинка
-            return new Itog { Kadrov = kadry.Count, Sredniy = 1e6 * kadry.Count / sum, Low1 = low(0.01), Low01 = low(0.001), RyvkovVMin = ryvki / (sum / 6e7) };
+            // FPS по полусекундам подряд: сколько игра держит постоянно, без одиночных рывков
+            var okna = new List<double>(); long t = 0; int n = 0;
+            foreach (var k in kadry)
+            {
+                t += k; n++;
+                if (t >= 500000) { okna.Add(n * 1e6 / t); t = 0; n = 0; }
+            }
+            okna.Sort();
+            double derzhit = okna.Count > 0 ? okna[okna.Count / 20] : 1e6 * kadry.Count / sum;
+            return new Itog { Kadrov = kadry.Count, Sredniy = 1e6 * kadry.Count / sum, Low1 = low(0.01), Low01 = low(0.001), RyvkovVMin = ryvki / (sum / 6e7), Derzhit = derzhit };
         }
 
         // ---------- PresentMon (Intel, MIT): кадры через события Windows, а не через RivaTuner ----------
@@ -132,7 +142,8 @@ namespace RovnyFps
         public const string PmSha256 = "b2a706bc6ad475749e3b7e3409263aa1e6906d45bdcf993f6dbc0f660188f1af";
         public static string PmPath { get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "RovnyFPS", "PresentMon-2.6.0-x64.exe"); } }
         public static bool PmEst { get { return File.Exists(PmPath); } }
-        public static string PoslednijCsv;   // первый столбец строк с кадрами — pid окна впереди в момент чтения
+        public static string PoslednijCsv;
+        public static int PoverhSekund;      // последний замер: сколько секунд кадры шли через Windows поверх игры (не считались)   // первый столбец строк с кадрами — pid окна впереди в момент чтения
 
         public static void SkachatPm()
         {
@@ -176,7 +187,8 @@ namespace RovnyFps
                 p.BeginErrorReadLine();
                 try
                 {
-                    string[] head = null; int cPid = -1, cFt = -1, cLat = -1;
+                    string[] head = null; int cPid = -1, cFt = -1, cLat = -1, cMode = -1;
+                    double poverh = 0;
                     long front = 0; DateTime t = DateTime.UtcNow;
                     string line;
                     while (front < sekund * 1000L && (line = p.StandardOutput.ReadLine()) != null)
@@ -191,13 +203,23 @@ namespace RovnyFps
                             cPid = Kolonka(head, "ProcessID");
                             cFt = Kolonka(head, "MsBetweenPresents", "FrameTime");
                             cLat = Kolonka(head, "MsAllInputToPhotonLatency", "AllInputToPhotonLatency");
+                            cMode = Kolonka(head, "PresentMode");
                             if (cPid < 0 || cFt < 0) throw new IOException("PresentMon выдал незнакомые столбцы: " + line);
                             continue;
                         }
                         var now = DateTime.UtcNow;
                         int pid; double ms;
                         if (f.Length <= cFt || !int.TryParse(f[cPid], out pid)) continue;
-                        if (ForegroundPid() == pid)
+                        // «Composed: …» — кадры идут через Windows: поверх игры окно или оверлей (счётчик FPS NVIDIA,
+                        // уведомление). Игра тогда сама идёт медленнее: 04.11 в Deadlock 40 FPS вместо 289, почти 5 минут
+                        // подряд — и подбор поставил лимит 35. Такие кадры в замер не берём.
+                        bool cherezWindows = cMode >= 0 && cMode < f.Length && f[cMode].StartsWith("Composed");
+                        if (cherezWindows)
+                        {
+                            double pm;
+                            if (double.TryParse(f[cFt], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out pm) && pm > 0) poverh += pm;
+                        }
+                        else if (ForegroundPid() == pid)
                         {
                             if (double.TryParse(f[cFt], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out ms) && ms > 0)
                                 kadry.Add((int)(ms * 1000));
@@ -209,6 +231,7 @@ namespace RovnyFps
                         }
                         t = now;
                     }
+                    PoverhSekund = (int)(poverh / 1000);
                     stop.ThrowIfCancellationRequested();
                     if (front < sekund * 1000L && kadry.Count < 100) throw new IOException("Игра закрылась раньше, чем закончился замер.");
                 }
@@ -227,12 +250,14 @@ namespace RovnyFps
             return kadry;
         }
 
-        // Лимит: не выше экрана (на 144+ Гц — на 3 ниже, под G-Sync/FreeSync) и с запасом 5% под 1% low
-        // без лимита — тогда компьютер держит его и в самых тяжёлых местах. Кратно 5, не ниже 30.
-        public static int VybratLimit(double low1BezLimita, int hz)
+        // Лимит: не выше экрана (на 144+ Гц — на 3 ниже, под G-Sync/FreeSync) и с запасом 5% под FPS, который
+        // игра держит без лимита постоянно (Itog.Derzhit). Не под 1% low: 04.11 в Deadlock 285 FPS в среднем с
+        // редкими рывками по 26 мс дали 1% low 38 и лимит 35 — рывки лимитом не убрать, а игра стала лагать.
+        // Кратно 5, не ниже 30.
+        public static int VybratLimit(double derzhitBezLimita, int hz)
         {
             int ekran = hz > 60 ? hz - 3 : hz;
-            int zapas = (int)(low1BezLimita * 0.95) / 5 * 5;
+            int zapas = (int)(derzhitBezLimita * 0.95) / 5 * 5;
             return Math.Max(30, Math.Min(ekran, zapas));
         }
     }

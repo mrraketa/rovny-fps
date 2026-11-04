@@ -1850,16 +1850,16 @@ namespace RovnyFps
             {
                 await Task.Run(() => core.ZamerProfile(g)); etap = 1;
                 var bez = await Izmerit(g, "Запусти игру и 2 минуты играй как обычно — в бою, не в меню.", stop);
-                int lim = Zamer.VybratLimit(bez.Low1, hz);
+                int lim = Zamer.VybratLimit(bez.Derzhit, hz);
                 await Task.Run(() => { core.VernutProfile(g, false); core.Enable(g, lim, t => { }); }); etap = 2;
                 Itog s = null;
                 try { s = await Izmerit(g, "Лимит " + lim + " поставлен. Запусти игру — проверю результат.", stop); }
                 catch (OperationCanceledException) { }   // лимит уже стоит; проверку можно пропустить
+                int poverh = bez.Poverh + (s != null ? s.Poverh : 0);
                 itog = "Без лимита: 1% low " + Itog.Chislo(bez.Low1) + ", рывков " + Itog.Chislo(bez.RyvkovVMin) + " в минуту" +
-                       (bez.ZaderzhkaMs.HasValue ? ", задержка мыши " + Itog.Chislo(bez.ZaderzhkaMs.Value) + " мс" : "") + ".\n" +
+                       (poverh > 10 ? " (оверлей поверх игры " + poverh + " с — не считал)" : "") + ".\n" +
                        (s == null ? "Поставил лимит " + lim + "." :
-                        "С лимитом " + lim + ": 1% low " + Itog.Chislo(s.Low1) + ", рывков " + Itog.Chislo(s.RyvkovVMin) + " в минуту" +
-                        (s.ZaderzhkaMs.HasValue ? ", задержка мыши " + Itog.Chislo(s.ZaderzhkaMs.Value) + " мс." : "."));
+                        "С лимитом " + lim + ": 1% low " + Itog.Chislo(s.Low1) + ", рывков " + Itog.Chislo(s.RyvkovVMin) + " в минуту" + ".");
             }
             catch (OperationCanceledException) { itog = "Замер отменён."; tone = StatusLine.Tone.Info; }
             catch (Exception ex) { itog = ex.Message; tone = StatusLine.Tone.Error; }
@@ -1892,10 +1892,10 @@ namespace RovnyFps
                     await Task.Run(() => core.Enable(g, lim, t => { }));
                 }
                 var s = await Izmerit(g, "Лимит " + lim + " стоит. Запусти игру и 2 минуты играй как обычно.", stop);
-                itog = (ss ? "Без разрывов (" + lim + " Гц)" : "С лимитом " + lim) + ": 1% low " + Itog.Chislo(s.Low1) + ", 0,1% low " + Itog.Chislo(s.Low01) + ", рывков " + Itog.Chislo(s.RyvkovVMin) + " в мин" +
-                       (s.ZaderzhkaMs.HasValue ? ", задержка мыши " + Itog.Chislo(s.ZaderzhkaMs.Value) + " мс." : ".") +
+                itog = (ss ? "Без разрывов (" + lim + " Гц)" : "С лимитом " + lim) + ": 1% low " + Itog.Chislo(s.Low1) + ", 0,1% low " + Itog.Chislo(s.Low01) + ", рывков " + Itog.Chislo(s.RyvkovVMin) + " в мин" + "." +
                        (s.Tochno ? "" : " (через RivaTuner — точнее с PresentMon)");
                 // 1% low заметно ниже лимита — компьютер его в тяжёлых местах не держит
+                if (s.Poverh > 10) itog += " Оверлей поверх игры " + s.Poverh + " с — не считал.";
                 if (s.Low1 < lim * 0.95) { itog += "\nНе держит: поставь ниже или нажми «Подобрать по замеру»."; tone = StatusLine.Tone.Warn; }
                 else itog += "\nДержит ровно.";
             }
@@ -1965,6 +1965,7 @@ namespace RovnyFps
             var it = Zamer.Poschitat(kadry);
             if (it == null) throw new Exception("Кадров слишком мало — замер не получился, попробуй ещё раз.");
             it.Tochno = pm;
+            it.Poverh = pm ? Zamer.PoverhSekund : 0;
             // Задержку мыши не показываем: AllInputToPhotonLatency в Deadlock 04.11 вышла 5 мс при 60 FPS (меньше кадра —
             // не верю), а DisplayLatency одинакова у RivaTuner и у лимита игры (19,0 и 19,6 мс) — цену лимита не различает.
             // Сырые столбцы остаются в CSV замера (zamery\).
@@ -1978,7 +1979,7 @@ namespace RovnyFps
 
         // Обновления (Obnovlenie.cs): номер этой сборки и манифест в открытом репозитории.
         // Выпустить новую версию — vypustit.ps1 рядом (сам поднимает номер).
-        public const int Versiya = 2;
+        public const int Versiya = 3;
         public const string ManifestUrl = "https://raw.githubusercontent.com/mrraketa/rovny-fps/main/versiya.txt";
         public const string SupportUrl = "https://boosty.to/raketo4ka/donate";
 
@@ -2150,6 +2151,11 @@ namespace RovnyFps
                 Check(log, "подбор: 144 Гц, 1% low 109 → 100", Zamer.VybratLimit(109.1, 144) == 100);
                 Check(log, "подбор: 144 Гц, 1% low 300 → 141", Zamer.VybratLimit(300, 144) == 141);
                 Check(log, "подбор: слабый ПК, 1% low 20 → 30", Zamer.VybratLimit(20, 60) == 30);
+                // Deadlock 04.11 19:30: ~285 FPS, 1% кадров по 26 мс — держит постоянно ~280, лимит на 60 Гц = 60, а не 35
+                var ryvkami = Enumerable.Range(0, 10000).Select(i => i % 100 == 0 ? 26000 : 3500).ToList();   // рывки вразброс, как в игре
+                var ir = Zamer.Poschitat(ryvkami);
+                Check(log, "подбор по рывкам: 1% low " + Itog.Chislo(ir.Low1) + ", держит " + Itog.Chislo(ir.Derzhit) + " → лимит " + Zamer.VybratLimit(ir.Derzhit, 60),
+                    ir.Low1 < 50 && ir.Derzhit > 200 && Zamer.VybratLimit(ir.Derzhit, 60) == 60);
                 var kadry = Enumerable.Repeat(16667, 9900).Concat(Enumerable.Repeat(33000, 90)).Concat(Enumerable.Repeat(80000, 10)).ToList();
                 var it = Zamer.Poschitat(kadry);
                 Check(log, "замер: 1% low " + Itog.Chislo(it.Low1) + ", 0,1% low " + Itog.Chislo(it.Low01), Math.Abs(it.Low1 - 30.3) < 0.1 && Math.Abs(it.Low01 - 12.5) < 0.1);
