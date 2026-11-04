@@ -1490,7 +1490,7 @@ namespace RovnyFps
             Font = Ui.Body; BackColor = Ui.Bg; ForeColor = Ui.Txt;
             FormBorderStyle = FormBorderStyle.FixedSingle; MaximizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(S(420), S(640));
+            ClientSize = new Size(S(420), S(660));
             DoubleBuffered = true;
             try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
             try { var st = typeof(MainForm).Assembly.GetManifestResourceStream("logo64.png"); if (st != null) logo = Image.FromStream(st); } catch { }
@@ -1573,7 +1573,7 @@ namespace RovnyFps
             off.Text = "Выключить";
             off.Click += delegate { Run(false); };
 
-            status.SetBounds(S(22), S(602), S(376), S(34));
+            status.SetBounds(S(22), S(602), S(376), S(54));   // до трёх строк: итог замера «было / стало» с пометкой
 
             ssync.AccessibleName = "Без разрывов: подгонять кадры под экран (Scanline Sync)";
             int sw = TextRenderer.MeasureText(ssync.Text, Ui.SmallSemi).Width + S(28);
@@ -1881,7 +1881,7 @@ namespace RovnyFps
                 int poverh = bez.Poverh + (s != null ? s.Poverh : 0);
                 itog = "Без лимита: 1% low " + Itog.Chislo(bez.Low1) + ", рывков " + Itog.Chislo(bez.RyvkovVMin) + " в минуту" +
                        (poverh > 10 ? " (оверлей поверх игры " + poverh + " с — не считал)" : "") +
-                       (bez.CherezWindows ? " (кадры через Windows — окно или оверлей)" : "") + ".\n" +
+                       (bez.CherezWindows ? ", кадры через Windows (окно или оверлей)" : "") + ".\n" +
                        (s == null ? "Поставил лимит " + lim + "." :
                         "С лимитом " + lim + ": 1% low " + Itog.Chislo(s.Low1) + ", рывков " + Itog.Chislo(s.RyvkovVMin) + " в минуту" + ".");
             }
@@ -1950,7 +1950,7 @@ namespace RovnyFps
                     (itog ?? "").Replace("\n", " | ") + (Zamer.PoslednijCsv != null ? "  [" + Path.GetFileName(Zamer.PoslednijCsv) + "]" : "") + "\r\n", new UTF8Encoding(false));
             }
             catch (Exception) { }
-            podborStop = null; busy = false; list.Enabled = other.Enabled = true;
+            podborStop = null; busy = false; list.Enabled = other.Enabled = off.Enabled = true;
             foreach (var c in chips) c.Enabled = true;
             core.LoadState();
             var found = await Task.Run(() => core.ListGames());
@@ -2014,7 +2014,7 @@ namespace RovnyFps
 
         // Обновления (Obnovlenie.cs): номер этой сборки и манифест в открытом репозитории.
         // Выпустить новую версию — vypustit.ps1 рядом (сам поднимает номер).
-        public const int Versiya = 5;
+        public const int Versiya = 6;
         public const string ManifestUrl = "https://raw.githubusercontent.com/mrraketa/rovny-fps/main/versiya.txt";
         public const string SupportUrl = "https://boosty.to/raketo4ka/donate";
 
