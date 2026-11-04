@@ -36,6 +36,7 @@ namespace RovnyFps
         public Dictionary<string, int> Fps = new Dictionary<string, int>();        // запомненный лимит
         public Dictionary<string, string> Orig = new Dictionary<string, string>(); // "appid|account" -> прежние LaunchOptions ("-" = не было)
         public List<string> Custom = new List<string>();
+        public HashSet<string> Ssync = new HashSet<string>();                      // «Без разрывов» (Scanline Sync)
         string path;
 
         public static State Load(string path)
@@ -53,6 +54,7 @@ namespace RovnyFps
                     else if (p[0] == "fps" && p.Length >= 3) s.Fps[p[1]] = int.Parse(p[2]);
                     else if (p[0] == "orig" && p.Length >= 3) s.Orig[p[1]] = p[2];
                     else if (p[0] == "custom" && p.Length >= 2) s.Custom.Add(p[1]);
+                    else if (p[0] == "ssync" && p.Length >= 2) s.Ssync.Add(p[1]);
                 }
                 catch (Exception) { } // битая строка — пропускаем, остальное читаем
             }
@@ -66,6 +68,7 @@ namespace RovnyFps
             foreach (var kv in Fps) sb.Append("fps\t" + kv.Key + "\t" + kv.Value + "\n");
             foreach (var kv in Orig) sb.Append("orig\t" + kv.Key + "\t" + kv.Value + "\n");
             foreach (var c in Custom) sb.Append("custom\t" + c + "\n");
+            foreach (var k in Ssync) sb.Append("ssync\t" + k + "\n");
             Disk.Write(path, sb.ToString(), new UTF8Encoding(false));
         }
     }
@@ -768,6 +771,10 @@ namespace RovnyFps
         {
             if (TestMode || St.On.Count == 0) return;
             try { SetAutostart(true); } catch { }
+            // Лимит держит только запущенный RivaTuner. Если его закрыли (или он упал) без перезагрузки,
+            // автозапуск не сработает до следующего входа в Windows — поднимаем его через то же задание.
+            if (Process.GetProcessesByName("RTSS").Length == 0 && File.Exists(Path.Combine(RtssDir ?? "", "RTSS.exe")))
+                try { Process.Start(new ProcessStartInfo("schtasks.exe", "/Run /TN \"" + TaskName + "\"") { CreateNoWindow = true, UseShellExecute = false }).WaitForExit(); } catch { }
         }
 
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
@@ -792,17 +799,22 @@ namespace RovnyFps
         // reflex=true — лимитер через NVIDIA Reflex, как в гайде. Он только для CS2, где Reflex игры
         // выключен ключом -noreflex. В Доте (замер 30.10) он ронял FPS ниже лимита и раскачивал кадры
         // на 16–20 мс, поэтому остальным играм — обычный лимитер RivaTuner.
-        public static string Profile(int fps, bool reflex)
+        // ssync=true — «Без разрывов»: Scanline Sync RivaTuner, кадр выводится, когда развёртка у самого низа экрана
+        // (SyncScanline0=-100 — отсчёт от низа; стартовое значение с форума Blur Busters). Лимит тогда — частота экрана,
+        // Limit=0. SyncTimeout=1 — медленный кадр не ждёт строку. 04.11 в Deadlock на 60 Гц: держит 60, полосы нет,
+        // вслепую он выбрал его против обычного лимита 60.
+        public static string Profile(int fps, bool reflex, bool ssync = false)
         {
             string r = reflex ? "1" : "0";
+            if (ssync) { fps = 0; reflex = false; r = "0"; }
             return string.Join("\r\n", new[] {
                 "[OSD]", "EnableOSD=1", "EnableBgnd=0", "EnableFill=0", "EnableStat=0", "BaseColor=FFFFFFFF", "BgndColor=00000000",
                 "FillColor=80000000", "PositionX=1", "PositionY=3", "ZoomRatio=2", "CoordinateSpace=0", "EnableFrameColorBar=0",
                 "FrameColorBarMode=0", "RefreshPeriod=500", "IntegerFramerate=1", "MaximumFrametime=1", "EnableFrametimeHistory=0",
                 "FrametimeHistoryWidth=-32", "FrametimeHistoryHeight=-4", "FrametimeHistoryStyle=0", "ScaleToFit=0",
                 "[Statistics]", "FramerateAveragingInterval=1000", "PeakFramerateCalc=0", "PercentileCalc=0", "FrametimeCalc=0", "PercentileBuffer=0",
-                "[Framerate]", "Limit=" + fps, "LimitDenominator=1", "LimitTime=0", "LimitTimeDenominator=1", "PassiveWait=1", "SyncTimeout=0",
-                "SyncScanline0=0", "SyncScanline1=0", "SyncPeriods=0", "SyncLimiter=" + (reflex ? "3" : "0"), "SyncDisplay=0", "ReflexSleep=" + r,
+                "[Framerate]", "Limit=" + fps, "LimitDenominator=1", "LimitTime=0", "LimitTimeDenominator=1", "PassiveWait=1", "SyncTimeout=" + (ssync ? "1" : "0"),
+                "SyncScanline0=" + (ssync ? "-100" : "0"), "SyncScanline1=0", "SyncPeriods=0", "SyncFlush=1", "SyncLimiter=" + (reflex ? "3" : "0"), "SyncDisplay=0", "ReflexSleep=" + r,
                 "ReflexSetLatencyMarker=1", "ReflexFallback=" + r, "ReflexSetSleepModePerFrame=" + r, "ReflexLowLatency=" + r,
                 "ReflexLowLatencyBoost=" + r, "ReflexGetLatency=" + r,
                 "[Hooking]", "EnableHooking=1", "EnableFloatingInjectionAddress=1", "EnableDynamicOffsetDetection=0", "HookLoadLibrary=0",
@@ -849,6 +861,40 @@ namespace RovnyFps
         {
             if (TestMode) return;
             Process.Start(new ProcessStartInfo(Path.Combine(RtssDir, "RTSS.exe")) { WorkingDirectory = RtssDir, UseShellExecute = true });
+        }
+
+        // ---------- применить профили на ходу ----------
+        // RTSSHooks64.dll из SDK RivaTuner: UpdateProfiles — «force all currently loaded 3D applications
+        // to reload the profiles» (SDK\Samples\SharedMemory\RTSSSharedMemorySample\RTSSProfileInterface.h).
+        // Так лимит меняется без перезапуска RivaTuner: тот под запущенной игрой 04.11 уронил Deadlock.
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern IntPtr LoadLibrary(string path);
+        [DllImport("kernel32.dll", CharSet = CharSet.Ansi)] static extern IntPtr GetProcAddress(IntPtr h, string name);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate void UpdateProfilesFn();
+
+        bool Perechitat()
+        {
+            if (Process.GetProcessesByName("RTSS").Length == 0) return false;
+            try
+            {
+                var h = LoadLibrary(Path.Combine(RtssDir, Environment.Is64BitProcess ? "RTSSHooks64.dll" : "RTSSHooks.dll"));
+                if (h == IntPtr.Zero) return false;
+                var f = GetProcAddress(h, "UpdateProfiles");
+                if (f == IntPtr.Zero) return false;
+                ((UpdateProfilesFn)Marshal.GetDelegateForFunctionPointer(f, typeof(UpdateProfilesFn)))();
+                return true;
+            }
+            catch (Exception) { return false; }
+        }
+
+        // RivaTuner запущен — перечитать профили на ходу; не запущен — просто запустить.
+        // Перезапуск — только запасной путь, и только когда игра закрыта.
+        void Primenit(Game g)
+        {
+            if (TestMode) return;
+            if (Perechitat()) return;
+            if (Process.GetProcessesByName("RTSS").Length == 0) { StartRtss(); return; }
+            if (g != null && Running(g)) throw new Exception("RivaTuner не принял новый профиль на ходу. Закрой игру и нажми ещё раз.");
+            StopRtss(); StartRtss();
         }
 
         const string TaskName = "RovnyFPS - RivaTuner";
@@ -1078,7 +1124,6 @@ namespace RovnyFps
                             throw new Exception(e + " уже настроен для другой игры — сначала выключи её.");
 
             Directory.CreateDirectory(ProfilesDir);
-            StopRtss();
             try
             {
                 // exe поменялся (игра обновилась) — профиль старого exe убираем
@@ -1091,7 +1136,7 @@ namespace RovnyFps
                     var cfg = Path.Combine(ProfilesDir, exe + ".cfg");
                     var bak = cfg + ".rovnyfps.bak";
                     if (File.Exists(cfg) && !St.On.ContainsKey(g.Key) && !File.Exists(bak)) File.Copy(cfg, bak);
-                    Disk.Write(cfg, Profile(fps, cs2), Encoding.ASCII);
+                    Disk.Write(cfg, Profile(fps, cs2, !cs2 && St.Ssync.Contains(g.Key)), Encoding.ASCII);
                 }
                 St.On[g.Key] = fps; St.OnExes[g.Key] = string.Join(";", g.Exes); St.Fps[g.Key] = fps;
                 St.Save();
@@ -1099,10 +1144,10 @@ namespace RovnyFps
                 if (cs2) EditLaunchOptions("730", true);
                 St.Save();
             }
-            finally { StartRtss(); } // даже после ошибки RivaTuner не должен остаться выключенным
-            bool running = g.Exes.Any(e => Process.GetProcessesByName(Path.GetFileNameWithoutExtension(e)).Length > 0);
+            finally { Primenit(g); } // даже после ошибки RivaTuner не должен остаться выключенным
+            // CS2 перезапускать всё равно: параметры запуска Steam читаются при старте игры
             string tail = cs2 ? "Запускай CS2." : "Если в игре есть свой лимит FPS — поставь его выше этого или выключи.";
-            return (running ? "Готово. Перезапусти игру. " : "Готово. ") + tail;
+            return (cs2 && Running(g) ? "Готово. Перезапусти CS2. " : "Готово. ") + tail;
         }
 
         void RemoveProfile(string exe)
@@ -1126,18 +1171,16 @@ namespace RovnyFps
                     {
                         var cfg = Path.Combine(ProfilesDir, exe + ".cfg");
                         if (!File.Exists(cfg) || !File.ReadAllText(cfg).Contains("SyncLimiter=3")) continue;
-                        if (!changed) StopRtss();
                         changed = true;
-                        Disk.Write(cfg, Profile(kv.Value, false), Encoding.ASCII);
+                        Disk.Write(cfg, Profile(kv.Value, false, St.Ssync.Contains(kv.Key)), Encoding.ASCII);
                     }
                 }
             }
-            finally { if (changed) StartRtss(); }
+            finally { if (changed) try { Primenit(null); } catch (Exception) { } }
         }
 
         public string Disable(Game g)
         {
-            bool was = StopRtss();
             try
             {
                 string exes;
@@ -1149,10 +1192,48 @@ namespace RovnyFps
                 St.Save();
                 if (St.On.Count == 0) SetAutostart(false);
             }
-            finally { if (was || St.On.Count > 0) StartRtss(); }
+            finally { if (Process.GetProcessesByName("RTSS").Length > 0 || St.On.Count > 0) Primenit(g); }
             return St.On.Count == 0
                 ? "Выключено. Лимитов больше нет. RivaTuner остался — удалить его можно в «Приложениях» Windows."
                 : "Выключено. Лимита для этой игры больше нет.";
+        }
+
+        // Перезапуск RivaTuner под запущенной игрой 04.11 уронил Deadlock (1 раз из 6), поэтому
+        // профиль меняем только при закрытой игре.
+        public bool Running(Game g)
+        {
+            return !TestMode && g.Exes.Any(e => Process.GetProcessesByName(Path.GetFileNameWithoutExtension(e)).Length > 0);
+        }
+
+        // ---------- подбор лимита: временный профиль без лимита на время замера ----------
+        // Свой профиль игрока сохраняем так же, как Enable, чтобы VernutProfile вернул всё как было.
+        public void ZamerProfile(Game g)
+        {
+            Directory.CreateDirectory(ProfilesDir);
+            try
+            {
+                foreach (var exe in g.Exes)
+                {
+                    var cfg = Path.Combine(ProfilesDir, exe + ".cfg");
+                    var bak = cfg + ".rovnyfps.bak";
+                    if (File.Exists(cfg) && !St.On.ContainsKey(g.Key) && !File.Exists(bak)) File.Copy(cfg, bak);
+                    Disk.Write(cfg, Profile(0, false), Encoding.ASCII);
+                }
+            }
+            finally { Primenit(g); }
+        }
+
+        public void VernutProfile(Game g, bool restart)
+        {
+            try
+            {
+                foreach (var exe in g.Exes)
+                {
+                    if (St.On.ContainsKey(g.Key)) Disk.Write(Path.Combine(ProfilesDir, exe + ".cfg"), Profile(St.On[g.Key], g.AppId == "730", g.AppId != "730" && St.Ssync.Contains(g.Key)), Encoding.ASCII);
+                    else RemoveProfile(exe);
+                }
+            }
+            finally { if (restart) Primenit(g); }
         }
     }
 
@@ -1383,8 +1464,11 @@ namespace RovnyFps
         readonly GameList list = new GameList();
         readonly Btn main = new Btn(Btn.Kind.Primary), off = new Btn(Btn.Kind.Secondary), minus = new Btn(Btn.Kind.Round), plus = new Btn(Btn.Kind.Round);
         readonly List<Btn> chips = new List<Btn>();
+        readonly Btn ssync = new Btn(Btn.Kind.Chip) { Text = "Без разрывов" };   // Scanline Sync, справа в ряду чисел
         readonly Label value = new Label(), hint = new Label(), sub = new Label(), section = new Label();
-        readonly LinkLabel other = new LinkLabel(), support = new LinkLabel();
+        readonly LinkLabel other = new LinkLabel(), support = new LinkLabel(), podbor = new LinkLabel(), proverka = new LinkLabel();
+        bool pmOtkaz;   // отказался качать PresentMon или он не скачался — мерим буфером RivaTuner
+        CancellationTokenSource podborStop;   // не null — идёт подбор лимита, главная кнопка его отменяет
         readonly StatusLine status = new StatusLine();
         readonly Btn upd = new Btn(Btn.Kind.Chip);   // «Обновить до версии N» — видна, только когда есть новая (Obnovlenie.cs)
         Obnovlenie.Est novoe;
@@ -1433,6 +1517,22 @@ namespace RovnyFps
 
             section.Text = "ЛИМИТ КАДРОВ"; section.Font = Ui.SmallSemi; section.ForeColor = Ui.Muted; section.AutoSize = true; section.Location = new Point(S(22), S(428));
 
+            // замер игры без лимита → лимит чуть ниже её 1% low → замер с ним и строка «до/после»
+            podbor.Text = "Подобрать по замеру"; podbor.Font = Ui.Small; podbor.AutoSize = true;
+            podbor.LinkColor = Ui.Muted; podbor.ActiveLinkColor = Ui.Txt; podbor.VisitedLinkColor = Ui.Muted;
+            podbor.LinkBehavior = LinkBehavior.HoverUnderline; podbor.Cursor = Cursors.Hand;
+            podbor.AccessibleName = "Подобрать лимит по замеру игры";
+            podbor.Location = new Point(S(398) - TextRenderer.MeasureText(podbor.Text, Ui.Small).Width, S(428));
+            podbor.LinkClicked += delegate { Podobrat(); };
+
+            // свой лимит: поставить число из поля и замерить, держит ли его компьютер
+            proverka.Text = "Проверить"; proverka.Font = Ui.Small; proverka.AutoSize = true;
+            proverka.LinkColor = Ui.Muted; proverka.ActiveLinkColor = Ui.Txt; proverka.VisitedLinkColor = Ui.Muted;
+            proverka.LinkBehavior = LinkBehavior.HoverUnderline; proverka.Cursor = Cursors.Hand;
+            proverka.AccessibleName = "Проверить замером выбранный лимит";
+            proverka.Location = new Point(podbor.Left - S(16) - TextRenderer.MeasureText(proverka.Text, Ui.Small).Width, S(428));
+            proverka.LinkClicked += delegate { Proverit(); };
+
             minus.Text = "−"; plus.Text = "+";
             minus.SetBounds(S(22), S(452), S(38), S(38)); plus.SetBounds(S(142), S(452), S(38), S(38));
             minus.AccessibleName = "Меньше"; plus.AccessibleName = "Больше";
@@ -1454,16 +1554,21 @@ namespace RovnyFps
             hint.ForeColor = Ui.Muted; hint.Font = Ui.Small; hint.SetBounds(S(194), S(452), S(204), S(40));
 
             main.SetBounds(S(22), S(546), S(376), S(46));
-            main.Click += delegate { Run(true); };
+            main.Click += delegate { if (podborStop != null) podborStop.Cancel(); else Run(true); };
             off.Text = "Выключить";
             off.Click += delegate { Run(false); };
 
             status.SetBounds(S(22), S(602), S(376), S(34));
 
+            ssync.AccessibleName = "Без разрывов: подгонять кадры под экран (Scanline Sync)";
+            int sw = TextRenderer.MeasureText(ssync.Text, Ui.SmallSemi).Width + S(28);
+            ssync.SetBounds(S(398) - sw, S(502), sw, S(30));
+            ssync.Click += delegate { PereklyuchitSsync(); };
+
             upd.Selected = true; upd.Visible = false;
             upd.Click += delegate { Obnovit(); };
 
-            Controls.AddRange(new Control[] { sub, list, other, support, section, minus, value, plus, hint, main, off, status, upd });
+            Controls.AddRange(new Control[] { sub, list, other, support, section, proverka, podbor, minus, value, plus, hint, main, off, status, upd, ssync });
             SetFps(60);
             UpdateButtons();
 
@@ -1566,6 +1671,7 @@ namespace RovnyFps
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
             // посреди работы закрывать нельзя: Steam останется закрытым, файл — недописанным
+            if (podborStop != null) { podborStop.Cancel(); e.Cancel = true; return; }
             if (busy) { e.Cancel = true; status.Show("Подожди, заканчиваю…", StatusLine.Tone.Info); return; }
             base.OnFormClosing(e);
         }
@@ -1632,7 +1738,7 @@ namespace RovnyFps
         {
             var g = list.Selected;
             bool on = g != null && core.St != null && core.St.On.ContainsKey(g.Key);
-            main.Text = busy ? "Настраиваю…" : on ? "Обновить лимит" : "Включить";
+            main.Text = podborStop != null ? "Отменить замер" : busy ? "Настраиваю…" : on ? "Обновить лимит" : "Включить";
             off.Visible = on;
             main.Width = on ? Ui.S(258) : Ui.S(376);
             off.SetBounds(Ui.S(288), main.Top, Ui.S(110), main.Height);
@@ -1648,18 +1754,35 @@ namespace RovnyFps
             // только CS2 настраивается через NVIDIA Reflex; обычный лимитер работает на любой видеокарте
             bool blocked = g != null && g.AppId == "730" && !on && !Core.Nvidia;
             main.Enabled = g != null && !busy && !blocked;
-            minus.Enabled = plus.Enabled = g != null && !busy;
+            bool ss = g != null && core.St.Ssync.Contains(g.Key) && g.AppId != "730";
+            ssync.Selected = ss; ssync.Invalidate();
+            ssync.Enabled = g != null && !busy && g.AppId != "730";   // в CS2 — режим из гайда (Reflex), с ним не совмещается
+            minus.Enabled = plus.Enabled = g != null && !busy && !ss;
+            foreach (var c in chips) c.Enabled = !busy && !ss;
+            hint.Text = ss ? "Кадры под экран " + hz + " Гц, без полосы разрыва. Нужен запас FPS."
+                           : "Чуть ниже FPS, который игра держит в драках. Экран: " + hz + " Гц";
+            podbor.Enabled = proverka.Enabled = g != null && !busy && !blocked;
             if (busy) return;
             string warn = g != null ? Core.WarningFor(g) : null;
             if (g == null) status.Show(Loaded ? "" : "", StatusLine.Tone.Info);
             else if (blocked) status.Show("Для CS2 нужна видеокарта NVIDIA.", StatusLine.Tone.Error);
             else if (on && g.Store == "не найдена") status.Show("Игра не найдена на диске — можно только выключить.", StatusLine.Tone.Warn);
+            else if (on && ss) status.Show("Включено без разрывов: RivaTuner выводит кадры под экран " + hz + " Гц.", StatusLine.Tone.Ok);
             else if (on) status.Show("Включено. RivaTuner держит " + core.St.On[g.Key] + " FPS.", StatusLine.Tone.Ok);
             // главное для нового человека — сказать заранее, что без RivaTuner не обойтись
             else if (!core.RtssInstalled) status.Show("Нужен бесплатный RivaTuner. Его нет — скачаю и поставлю сам, когда нажмёшь «Включить».", StatusLine.Tone.Warn);
             else if (warn != null) status.Show(warn, StatusLine.Tone.Warn);
             else if (otherUser) status.Show("Окно открыто от имени другого пользователя.", StatusLine.Tone.Warn);
             else status.Show("", StatusLine.Tone.Info);
+        }
+
+        void PereklyuchitSsync()
+        {
+            var g = list.Selected; if (g == null || busy || g.AppId == "730") return;
+            if (!core.St.Ssync.Remove(g.Key)) core.St.Ssync.Add(g.Key);
+            core.St.Save();
+            if (core.St.On.ContainsKey(g.Key)) Run(true);   // включённой игре — сразу, на ходу
+            else Refresh2();
         }
 
         void AddCustom()
@@ -1710,6 +1833,143 @@ namespace RovnyFps
             Fill(found, g.Key);
             status.Show(msg, ok ? StatusLine.Tone.Ok : StatusLine.Tone.Error);
         }
+
+        // ---------- «Подобрать по замеру» ----------
+        // Один запуск игры: замер без лимита → ставим лимит на ходу (UpdateProfiles) → замер с ним.
+        // Отмена возвращает профиль, каким он был до подбора.
+        async void Podobrat()
+        {
+            var g = list.Selected; if (g == null || busy) return;
+            if (!core.RtssInstalled) { status.Show("Сначала нажми «Включить» — нужен RivaTuner.", StatusLine.Tone.Warn); return; }
+            podborStop = new CancellationTokenSource();
+            var stop = podborStop.Token;
+            Zanyat();
+            int etap = 0;   // 1 — стоит временный профиль без лимита, 2 — лимит уже включён
+            string itog = null; var tone = StatusLine.Tone.Ok;
+            try
+            {
+                await Task.Run(() => core.ZamerProfile(g)); etap = 1;
+                var bez = await Izmerit(g, "Запусти игру и 2 минуты играй как обычно — в бою, не в меню.", stop);
+                int lim = Zamer.VybratLimit(bez.Low1, hz);
+                await Task.Run(() => { core.VernutProfile(g, false); core.Enable(g, lim, t => { }); }); etap = 2;
+                Itog s = null;
+                try { s = await Izmerit(g, "Лимит " + lim + " поставлен. Запусти игру — проверю результат.", stop); }
+                catch (OperationCanceledException) { }   // лимит уже стоит; проверку можно пропустить
+                itog = "Без лимита: 1% low " + Itog.Chislo(bez.Low1) + ", рывков " + Itog.Chislo(bez.RyvkovVMin) + " в минуту" +
+                       (bez.ZaderzhkaMs.HasValue ? ", задержка мыши " + Itog.Chislo(bez.ZaderzhkaMs.Value) + " мс" : "") + ".\n" +
+                       (s == null ? "Поставил лимит " + lim + "." :
+                        "С лимитом " + lim + ": 1% low " + Itog.Chislo(s.Low1) + ", рывков " + Itog.Chislo(s.RyvkovVMin) + " в минуту" +
+                        (s.ZaderzhkaMs.HasValue ? ", задержка мыши " + Itog.Chislo(s.ZaderzhkaMs.Value) + " мс." : "."));
+            }
+            catch (OperationCanceledException) { itog = "Замер отменён."; tone = StatusLine.Tone.Info; }
+            catch (Exception ex) { itog = ex.Message; tone = StatusLine.Tone.Error; }
+            if (etap == 1)
+            {
+                // вернуть профиль, каким он был
+                try { await Task.Run(() => core.VernutProfile(g, true)); }
+                catch (Exception ex) { itog += " " + ex.Message; tone = StatusLine.Tone.Warn; }
+            }
+            await Osvobodit(g, itog, tone);
+        }
+
+        // Свой лимит: если он ещё не стоит — ставим на ходу, потом замер с ним
+        async void Proverit()
+        {
+            var g = list.Selected; if (g == null || busy) return;
+            if (!core.RtssInstalled) { status.Show("Сначала нажми «Включить» — нужен RivaTuner.", StatusLine.Tone.Warn); return; }
+            // «Без разрывов» держит частоту экрана — сверяем с ней, а не с числом в поле
+            bool ss = core.St.Ssync.Contains(g.Key) && g.AppId != "730";
+            int lim = ss ? hz : fps;
+            podborStop = new CancellationTokenSource();
+            var stop = podborStop.Token;
+            Zanyat();
+            string itog; var tone = StatusLine.Tone.Ok;
+            try
+            {
+                int was;
+                if (!core.St.On.TryGetValue(g.Key, out was) || (!ss && was != lim))
+                {
+                    await Task.Run(() => core.Enable(g, lim, t => { }));
+                }
+                var s = await Izmerit(g, "Лимит " + lim + " стоит. Запусти игру и 2 минуты играй как обычно.", stop);
+                itog = (ss ? "Без разрывов (" + lim + " Гц)" : "С лимитом " + lim) + ": 1% low " + Itog.Chislo(s.Low1) + ", 0,1% low " + Itog.Chislo(s.Low01) + ", рывков " + Itog.Chislo(s.RyvkovVMin) + " в мин" +
+                       (s.ZaderzhkaMs.HasValue ? ", задержка мыши " + Itog.Chislo(s.ZaderzhkaMs.Value) + " мс." : ".") +
+                       (s.Tochno ? "" : " (через RivaTuner — точнее с PresentMon)");
+                // 1% low заметно ниже лимита — компьютер его в тяжёлых местах не держит
+                if (s.Low1 < lim * 0.95) { itog += "\nНе держит: поставь ниже или нажми «Подобрать по замеру»."; tone = StatusLine.Tone.Warn; }
+                else itog += "\nДержит ровно.";
+            }
+            catch (OperationCanceledException) { itog = "Замер отменён."; tone = StatusLine.Tone.Info; }
+            catch (Exception ex) { itog = ex.Message; tone = StatusLine.Tone.Error; }
+            await Osvobodit(g, itog, tone);
+        }
+
+        void Zanyat()
+        {
+            busy = true; minus.Enabled = plus.Enabled = list.Enabled = other.Enabled = podbor.Enabled = proverka.Enabled = off.Enabled = false;
+            foreach (var c in chips) c.Enabled = false;
+            UpdateButtons(); main.Enabled = true;
+        }
+
+        async Task Osvobodit(Game g, string itog, StatusLine.Tone tone)
+        {
+            // итог — ещё и в файл рядом с сырыми замерами
+            try
+            {
+                string dir = Path.Combine(Path.GetDirectoryName(Zamer.PmPath), "zamery");
+                Directory.CreateDirectory(dir);
+                File.AppendAllText(Path.Combine(dir, "itogi.txt"), DateTime.Now.ToString("yyyy-MM-dd HH:mm") + "  " + g.Name + "  " +
+                    (itog ?? "").Replace("\n", " | ") + (Zamer.PoslednijCsv != null ? "  [" + Path.GetFileName(Zamer.PoslednijCsv) + "]" : "") + "\r\n", new UTF8Encoding(false));
+            }
+            catch (Exception) { }
+            podborStop = null; busy = false; list.Enabled = other.Enabled = true;
+            foreach (var c in chips) c.Enabled = true;
+            core.LoadState();
+            var found = await Task.Run(() => core.ListGames());
+            Fill(found, g.Key);
+            status.Show(itog, tone);
+        }
+
+        // Ждёт игру, даёт минуту на загрузку и мерит 2 минуты, пока её окно впереди
+        async Task<Itog> Izmerit(Game g, string text, CancellationToken stop)
+        {
+            // точный замер — PresentMon от Intel; качаем только с согласия, один раз
+            if (!Zamer.PmEst && !pmOtkaz)
+            {
+                if (MessageBox.Show(this, "Для точного замера нужна бесплатная программа PresentMon от Intel (около 1 МБ, с GitHub). " +
+                        "Она видит кадры сама, а не через RivaTuner, и заодно мерит задержку от мыши до экрана.\n\nСкачать PresentMon?",
+                        "Ровный FPS", MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)
+                {
+                    status.Show("Скачиваю PresentMon…", StatusLine.Tone.Info);
+                    string oshibka = null;
+                    try { await Task.Run(() => Zamer.SkachatPm()); }
+                    catch (Exception ex) { oshibka = ex.Message; }
+                    if (oshibka != null) { status.Show(oshibka + " Мерю через RivaTuner.", StatusLine.Tone.Warn); pmOtkaz = true; await Task.Delay(2000); }
+                }
+                else pmOtkaz = true;
+            }
+            bool pm = Zamer.PmEst;
+            bool uzheIdet = core.Running(g);
+            status.Show(uzheIdet ? "Игра запущена — начинаю замер. Играй как обычно, окно держи впереди." : text, uzheIdet ? StatusLine.Tone.Info : StatusLine.Tone.Warn);
+            Action<string> say = t => BeginInvoke((Action)(() => status.Show(t, StatusLine.Tone.Info)));
+            var zaderzhki = new List<double>();
+            var kadry = await Task.Run(() =>
+            {
+                Zamer.Sobrat(g.Exes, 0, t => { }, () => true, stop);   // только дождаться игру
+                // минута на загрузку и вход в матч: экраны загрузки в замер не попадают
+                if (!uzheIdet) say("Игра запущена. Минута на загрузку — потом замер.");
+                for (int i = uzheIdet ? 10 : 60; i > 0; i--) { stop.ThrowIfCancellationRequested(); Thread.Sleep(1000); }
+                Action<int> hod = t => say("Замеряю… " + t + " из 120 с. Играй как обычно и двигай мышью, окно игры держи впереди.");
+                return pm ? Zamer.SobratPm(g.Exes, 120, hod, zaderzhki, stop) : Zamer.Sobrat(g.Exes, 120, hod, () => true, stop);
+            }, stop);
+            var it = Zamer.Poschitat(kadry);
+            if (it == null) throw new Exception("Кадров слишком мало — замер не получился, попробуй ещё раз.");
+            it.Tochno = pm;
+            // Задержку мыши не показываем: AllInputToPhotonLatency в Deadlock 04.11 вышла 5 мс при 60 FPS (меньше кадра —
+            // не верю), а DisplayLatency одинакова у RivaTuner и у лимита игры (19,0 и 19,6 мс) — цену лимита не различает.
+            // Сырые столбцы остаются в CSV замера (zamery\).
+            return it;
+        }
     }
 
     static class Program
@@ -1718,7 +1978,7 @@ namespace RovnyFps
 
         // Обновления (Obnovlenie.cs): номер этой сборки и манифест в открытом репозитории.
         // Выпустить новую версию — vypustit.ps1 рядом (сам поднимает номер).
-        public const int Versiya = 1;
+        public const int Versiya = 2;
         public const string ManifestUrl = "https://raw.githubusercontent.com/mrraketa/rovny-fps/main/versiya.txt";
         public const string SupportUrl = "https://boosty.to/raketo4ka/donate";
 
@@ -1885,6 +2145,23 @@ namespace RovnyFps
                 c.LoadState();
                 foreach (var g in c.ListGames()) log.AppendLine("  " + (g.Store ?? (g.AppId != null ? "Steam" : "своя")) + " | " + g.Key + " | " + g.Name + " | " + string.Join(", ", g.Exes) + " | fps по умолчанию " + c.DefaultFps(g));
 
+                // подбор лимита: Deadlock 04.11 без лимита 1% low 109 → на 60 Гц 60, на 144 Гц 100
+                Check(log, "подбор: 60 Гц, 1% low 109 → 60", Zamer.VybratLimit(109.1, 60) == 60);
+                Check(log, "подбор: 144 Гц, 1% low 109 → 100", Zamer.VybratLimit(109.1, 144) == 100);
+                Check(log, "подбор: 144 Гц, 1% low 300 → 141", Zamer.VybratLimit(300, 144) == 141);
+                Check(log, "подбор: слабый ПК, 1% low 20 → 30", Zamer.VybratLimit(20, 60) == 30);
+                var kadry = Enumerable.Repeat(16667, 9900).Concat(Enumerable.Repeat(33000, 90)).Concat(Enumerable.Repeat(80000, 10)).ToList();
+                var it = Zamer.Poschitat(kadry);
+                Check(log, "замер: 1% low " + Itog.Chislo(it.Low1) + ", 0,1% low " + Itog.Chislo(it.Low01), Math.Abs(it.Low1 - 30.3) < 0.1 && Math.Abs(it.Low01 - 12.5) < 0.1);
+                Check(log, "замер: рывков в минуту " + Itog.Chislo(it.RyvkovVMin), Math.Abs(it.RyvkovVMin - 10 / (kadry.Sum(x => (double)x) / 6e7)) < 0.01);
+                // «Без разрывов»: Scanline Sync вместо числа, Reflex выключен
+                string ps = Core.Profile(60, false, true), po = Core.Profile(60, false);
+                Check(log, "без разрывов: Limit=0, SyncScanline0=-100, SyncTimeout=1, SyncFlush=1",
+                    ps.Contains("Limit=0\r\n") && ps.Contains("SyncScanline0=-100") && ps.Contains("SyncTimeout=1") && ps.Contains("SyncFlush=1") && ps.Contains("SyncLimiter=0"));
+                Check(log, "обычный профиль без Scanline Sync", po.Contains("Limit=60\r\n") && po.Contains("SyncScanline0=0") && po.Contains("SyncTimeout=0"));
+                var stp = Path.Combine(dir, "ssync-state.txt");
+                var st1 = State.Load(stp); st1.Ssync.Add("1422450"); st1.Save();
+                Check(log, "без разрывов запоминается", State.Load(stp).Ssync.Contains("1422450"));
                 // VDF на копии настоящего localconfig
                 var src = Directory.GetFiles(Path.Combine(c.SteamDir, "userdata"), "localconfig.vdf", SearchOption.AllDirectories).Where(f => !f.Contains("\\0\\")).First();
                 string orig = File.ReadAllText(src, new UTF8Encoding(false));
