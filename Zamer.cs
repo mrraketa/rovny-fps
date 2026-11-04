@@ -22,6 +22,28 @@ namespace RovnyFps
         public static string Chislo(double v) { return v.ToString(v >= 100 ? "0" : "0.#", System.Globalization.CultureInfo.GetCultureInfo("ru-RU")); }
     }
 
+    // Журнал для разбора чужих сбоев (04.11: «у друга не запускаются замеры»): что программа делала по шагам.
+    // %LOCALAPPDATA%\RovnyFPS\zhurnal.txt, больше 2 МБ — старый уходит в zhurnal.old.txt. Ссылка «Журнал» в окне его показывает.
+    static class Zhurnal
+    {
+        public static string Put { get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "RovnyFPS", "zhurnal.txt"); } }
+        static readonly object zamok = new object();
+        public static void Pishi(string s)
+        {
+            try
+            {
+                lock (zamok)
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(Put));
+                    var fi = new FileInfo(Put);
+                    if (fi.Exists && fi.Length > 2000000) { File.Copy(Put, Path.ChangeExtension(Put, ".old.txt"), true); File.Delete(Put); }
+                    File.AppendAllText(Put, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss ") + s + "\r\n", new UTF8Encoding(false));
+                }
+            }
+            catch (Exception) { }   // журнал не должен ронять программу
+        }
+    }
+
     static class Zamer
     {
         const int BufOff = 924, PosOff = 5020;
@@ -61,6 +83,24 @@ namespace RovnyFps
             return IntPtr.Zero;
         }
 
+        static string Vidit(IntPtr p)
+        {
+            try
+            {
+                int esz = Marshal.ReadInt32(p, 8), aoff = Marshal.ReadInt32(p, 12), acnt = Marshal.ReadInt32(p, 16);
+                var names = new List<string>(); var name = new byte[260];
+                for (int i = 0; i < acnt; i++)
+                {
+                    var e = p + aoff + i * esz;
+                    if (Marshal.ReadInt32(e) == 0) continue;
+                    Marshal.Copy(e + 4, name, 0, 260);
+                    names.Add(Path.GetFileName(Encoding.Default.GetString(name).Split('\0')[0]));
+                }
+                return names.Count == 0 ? "ничего" : string.Join(", ", names);
+            }
+            catch (Exception ex) { return "ошибка чтения: " + ex.Message; }
+        }
+
         // Ждёт, пока RivaTuner увидит игру, и собирает время кадров, пока окно игры впереди
         // (в фоне игры сами себя тормозят). progress(сколько секунд набрано).
         public static List<int> Sobrat(ICollection<string> exes, int sekund, Action<int> progress, Func<bool> zhdu, CancellationToken stop)
@@ -70,8 +110,14 @@ namespace RovnyFps
             try
             {
                 IntPtr e = IntPtr.Zero; int pid = 0;
+                var zhdal = DateTime.UtcNow.AddSeconds(-20);
                 while (e == IntPtr.Zero)
                 {
+                    if ((DateTime.UtcNow - zhdal).TotalSeconds >= 15)
+                    {
+                        zhdal = DateTime.UtcNow;
+                        Zhurnal.Pishi("жду игру в RivaTuner (" + string.Join(", ", exes) + "): общая память " + (p == IntPtr.Zero ? "НЕ открыта — RivaTuner не запущен?" : "открыта; RivaTuner видит: " + Vidit(p)));
+                    }
                     stop.ThrowIfCancellationRequested();
                     if (p == IntPtr.Zero)
                     {
@@ -175,6 +221,7 @@ namespace RovnyFps
             var psi = new System.Diagnostics.ProcessStartInfo(PmPath, args.ToString())
                 { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true };
             var kadry = new List<int>();
+            Zhurnal.Pishi("PresentMon: " + PmPath + " " + args);
             // сырой CSV каждого замера — чтобы цифры итога можно было перепроверить
             string dir = Path.Combine(Path.GetDirectoryName(PmPath), "zamery");
             Directory.CreateDirectory(dir);
@@ -183,17 +230,25 @@ namespace RovnyFps
             using (var p = System.Diagnostics.Process.Start(psi))
             using (stop.Register(() => { try { p.Kill(); } catch (Exception) { } }))   // ReadLine ждёт кадров — отмена его будит
             {
-                p.ErrorDataReceived += delegate { };   // stderr читаем, чтобы не забился буфер
+                int oshibok = 0;
+                p.ErrorDataReceived += (s2, ev) => { if (ev.Data != null && oshibok++ < 30) Zhurnal.Pishi("PresentMon stderr: " + ev.Data); };   // заодно не забивается буфер
                 p.BeginErrorReadLine();
                 try
                 {
                     string[] head = null; int cPid = -1, cFt = -1, cLat = -1, cMode = -1;
                     double poverh = 0;
-                    long front = 0; DateTime t = DateTime.UtcNow;
+                    long front = 0; DateTime t = DateTime.UtcNow, hod = DateTime.UtcNow;
+                    int strok = 0, neVperedi = 0;
                     string line;
                     while (front < sekund * 1000L && (line = p.StandardOutput.ReadLine()) != null)
                     {
                         stop.ThrowIfCancellationRequested();
+                        strok++;
+                        if ((DateTime.UtcNow - hod).TotalSeconds >= 15)
+                        {
+                            hod = DateTime.UtcNow;
+                            Zhurnal.Pishi("PresentMon: строк " + strok + ", кадров в зачёт " + kadry.Count + ", окно игры не впереди " + neVperedi + ", поверх игры " + (int)(poverh / 1000) + " с, набрано " + front / 1000 + " с");
+                        }
                         var f = line.Split(',');
                         syroe.WriteLine((head == null ? "" : (ForegroundPid().ToString() + ",")) + line);
                         if (head == null)
@@ -205,6 +260,7 @@ namespace RovnyFps
                             cLat = Kolonka(head, "MsAllInputToPhotonLatency", "AllInputToPhotonLatency");
                             cMode = Kolonka(head, "PresentMode");
                             if (cPid < 0 || cFt < 0) throw new IOException("PresentMon выдал незнакомые столбцы: " + line);
+                            Zhurnal.Pishi("PresentMon: заголовок получен, столбцов " + head.Length);
                             continue;
                         }
                         var now = DateTime.UtcNow;
@@ -229,9 +285,12 @@ namespace RovnyFps
                             front += Math.Min(1000, (long)(now - t).TotalMilliseconds);
                             progress((int)(front / 1000));
                         }
+                        else neVperedi++;
                         t = now;
                     }
                     PoverhSekund = (int)(poverh / 1000);
+                    Zhurnal.Pishi("PresentMon: конец, строк " + strok + ", кадров в зачёт " + kadry.Count + ", не впереди " + neVperedi + ", поверх " + PoverhSekund + " с" +
+                        (p.HasExited ? ", PresentMon вышел сам с кодом " + p.ExitCode : ""));
                     stop.ThrowIfCancellationRequested();
                     if (front < sekund * 1000L && kadry.Count < 100) throw new IOException("Игра закрылась раньше, чем закончился замер.");
                 }

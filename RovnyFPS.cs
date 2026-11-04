@@ -753,6 +753,7 @@ namespace RovnyFps
             // остальным — частота монитора: больше кадров экран не покажет, а запас до потолка
             // процессора держит 1% low у самого лимита (замер в Доте 30.10: при 90 не держала, при 60–65 — ровно)
             int hz = MonitorHz();
+            if (hz > 60) hz -= 3;   // на частоте экрана с G-Sync/FreeSync FPS упирается в VSync — на 3 ниже (180 → 177)
             var cap = FpsCeilingFor(g);
             return cap.HasValue ? Math.Min(hz, cap.Value) : hz;
         }
@@ -891,7 +892,9 @@ namespace RovnyFps
         void Primenit(Game g)
         {
             if (TestMode) return;
-            if (Perechitat()) return;
+            bool naHodu = Perechitat();
+            Zhurnal.Pishi("профили: " + (naHodu ? "перечитаны на ходу (UpdateProfiles)" : "UpdateProfiles не вышел, RivaTuner " + (Process.GetProcessesByName("RTSS").Length == 0 ? "не запущен — запускаю" : "перезапускаю")));
+            if (naHodu) return;
             if (Process.GetProcessesByName("RTSS").Length == 0) { StartRtss(); return; }
             if (g != null && Running(g)) throw new Exception("RivaTuner не принял новый профиль на ходу. Закрой игру и нажми ещё раз.");
             StopRtss(); StartRtss();
@@ -1466,7 +1469,7 @@ namespace RovnyFps
         readonly List<Btn> chips = new List<Btn>();
         readonly Btn ssync = new Btn(Btn.Kind.Chip) { Text = "Без разрывов" };   // Scanline Sync, справа в ряду чисел
         readonly Label value = new Label(), hint = new Label(), sub = new Label(), section = new Label();
-        readonly LinkLabel other = new LinkLabel(), support = new LinkLabel(), podbor = new LinkLabel(), proverka = new LinkLabel();
+        readonly LinkLabel other = new LinkLabel(), support = new LinkLabel(), podbor = new LinkLabel(), proverka = new LinkLabel(), zhurnal = new LinkLabel();
         bool pmOtkaz;   // отказался качать PresentMon или он не скачался — мерим буфером RivaTuner
         CancellationTokenSource podborStop;   // не null — идёт подбор лимита, главная кнопка его отменяет
         readonly StatusLine status = new StatusLine();
@@ -1514,6 +1517,18 @@ namespace RovnyFps
             support.AccessibleName = "Поддержать автора на Boosty";
             support.Location = new Point(S(398) - TextRenderer.MeasureText(support.Text, Ui.Small).Width, S(390));
             support.LinkClicked += delegate { try { Process.Start(Program.SupportUrl); } catch { } };
+
+            // журнал шагов для разбора сбоев — показать файл в Проводнике, его можно переслать
+            zhurnal.Text = "Журнал"; zhurnal.Font = Ui.Small; zhurnal.AutoSize = true;
+            zhurnal.LinkColor = Ui.Muted; zhurnal.ActiveLinkColor = Ui.Txt; zhurnal.VisitedLinkColor = Ui.Muted;
+            zhurnal.LinkBehavior = LinkBehavior.HoverUnderline; zhurnal.Cursor = Cursors.Hand;
+            zhurnal.AccessibleName = "Показать журнал программы — его можно переслать автору";
+            zhurnal.Location = new Point(support.Left - S(16) - TextRenderer.MeasureText(zhurnal.Text, Ui.Small).Width, S(390));
+            zhurnal.LinkClicked += delegate
+            {
+                if (!File.Exists(Zhurnal.Put)) Zhurnal.Pishi("журнал открыт");
+                try { Process.Start("explorer.exe", "/select,\"" + Zhurnal.Put + "\""); } catch { }
+            };
 
             section.Text = "ЛИМИТ КАДРОВ"; section.Font = Ui.SmallSemi; section.ForeColor = Ui.Muted; section.AutoSize = true; section.Location = new Point(S(22), S(428));
 
@@ -1568,7 +1583,7 @@ namespace RovnyFps
             upd.Selected = true; upd.Visible = false;
             upd.Click += delegate { Obnovit(); };
 
-            Controls.AddRange(new Control[] { sub, list, other, support, section, proverka, podbor, minus, value, plus, hint, main, off, status, upd, ssync });
+            Controls.AddRange(new Control[] { sub, list, other, support, zhurnal, section, proverka, podbor, minus, value, plus, hint, main, off, status, upd, ssync });
             SetFps(60);
             UpdateButtons();
 
@@ -1615,6 +1630,13 @@ namespace RovnyFps
             var g = e.Graphics; g.InterpolationMode = InterpolationMode.HighQualityBicubic; g.SmoothingMode = SmoothingMode.AntiAlias;
             if (logo != null) g.DrawImage(logo, Ui.S(22), Ui.S(20), Ui.S(34), Ui.S(34));
             TextRenderer.DrawText(g, "Ровный FPS", Ui.Title, new Point(Ui.S(64), Ui.S(17)), Ui.Txt, Ui.Bg);
+            // номер версии справа вверху — на его месте появляется кнопка «Обновить»
+            if (!upd.Visible)
+            {
+                string v = "версия " + Program.Versiya;
+                int w = TextRenderer.MeasureText(v, Ui.Small).Width;
+                TextRenderer.DrawText(g, v, Ui.Small, new Point(Ui.S(398) - w, Ui.S(27)), Ui.Muted, Ui.Bg);
+            }
         }
 
         protected override void OnHandleCreated(EventArgs e)
@@ -1715,7 +1737,7 @@ namespace RovnyFps
         {
             var g = list.Selected;
             int max = g != null && Core.FpsCeilingFor(g).HasValue ? Core.FpsCeilingFor(g).Value : 1000;
-            var vals = new[] { hz, 120, 144, 240 }.Where(v => v <= max && v >= 30).Distinct().OrderBy(v => v).ToList();
+            var vals = new[] { hz > 60 ? hz - 3 : hz, 120, 144, 240 }.Where(v => v <= max && v >= 30).Distinct().OrderBy(v => v).ToList();
             if (chips.Count == vals.Count && chips.Select(c => (int)c.Tag).SequenceEqual(vals)) { SetFps(fps); return; }
             foreach (var c in chips) { Controls.Remove(c); c.Dispose(); }
             chips.Clear();
@@ -1840,6 +1862,7 @@ namespace RovnyFps
         async void Podobrat()
         {
             var g = list.Selected; if (g == null || busy) return;
+            Zhurnal.Pishi("подбор: " + g.Name + " (" + string.Join(", ", g.Exes) + "), экран " + hz + " Гц, RivaTuner " + (core.RtssInstalled ? "есть" : "нет"));
             if (!core.RtssInstalled) { status.Show("Сначала нажми «Включить» — нужен RivaTuner.", StatusLine.Tone.Warn); return; }
             podborStop = new CancellationTokenSource();
             var stop = podborStop.Token;
@@ -1862,7 +1885,8 @@ namespace RovnyFps
                         "С лимитом " + lim + ": 1% low " + Itog.Chislo(s.Low1) + ", рывков " + Itog.Chislo(s.RyvkovVMin) + " в минуту" + ".");
             }
             catch (OperationCanceledException) { itog = "Замер отменён."; tone = StatusLine.Tone.Info; }
-            catch (Exception ex) { itog = ex.Message; tone = StatusLine.Tone.Error; }
+            catch (Exception ex) { itog = ex.Message; tone = StatusLine.Tone.Error; Zhurnal.Pishi("подбор — сбой: " + ex); }
+            Zhurnal.Pishi("подбор — итог: " + (itog ?? "").Replace("\n", " | "));
             if (etap == 1)
             {
                 // вернуть профиль, каким он был
@@ -1876,6 +1900,7 @@ namespace RovnyFps
         async void Proverit()
         {
             var g = list.Selected; if (g == null || busy) return;
+            Zhurnal.Pishi("проверка: " + g.Name + " (" + string.Join(", ", g.Exes) + "), лимит " + fps + ", экран " + hz + " Гц");
             if (!core.RtssInstalled) { status.Show("Сначала нажми «Включить» — нужен RivaTuner.", StatusLine.Tone.Warn); return; }
             // «Без разрывов» держит частоту экрана — сверяем с ней, а не с числом в поле
             bool ss = core.St.Ssync.Contains(g.Key) && g.AppId != "730";
@@ -1900,7 +1925,8 @@ namespace RovnyFps
                 else itog += "\nДержит ровно.";
             }
             catch (OperationCanceledException) { itog = "Замер отменён."; tone = StatusLine.Tone.Info; }
-            catch (Exception ex) { itog = ex.Message; tone = StatusLine.Tone.Error; }
+            catch (Exception ex) { itog = ex.Message; tone = StatusLine.Tone.Error; Zhurnal.Pishi("проверка — сбой: " + ex); }
+            Zhurnal.Pishi("проверка — итог: " + (itog ?? "").Replace("\n", " | "));
             await Osvobodit(g, itog, tone);
         }
 
@@ -1943,7 +1969,7 @@ namespace RovnyFps
                     status.Show("Скачиваю PresentMon…", StatusLine.Tone.Info);
                     string oshibka = null;
                     try { await Task.Run(() => Zamer.SkachatPm()); }
-                    catch (Exception ex) { oshibka = ex.Message; }
+                    catch (Exception ex) { oshibka = ex.Message; Zhurnal.Pishi("PresentMon не скачался: " + ex); }
                     if (oshibka != null) { status.Show(oshibka + " Мерю через RivaTuner.", StatusLine.Tone.Warn); pmOtkaz = true; await Task.Delay(2000); }
                 }
                 else pmOtkaz = true;
@@ -1955,7 +1981,12 @@ namespace RovnyFps
             var zaderzhki = new List<double>();
             var kadry = await Task.Run(() =>
             {
-                Zamer.Sobrat(g.Exes, 0, t => { }, () => true, stop);   // только дождаться игру
+                // дождаться игру: PresentMon она нужна запущенной, а не видимой в RivaTuner (если RivaTuner к игре не
+                // прицепился, старое ожидание висело бы вечно)
+                Zhurnal.Pishi("замер: " + (pm ? "PresentMon" : "буфер RivaTuner") + ", игра " + (uzheIdet ? "уже запущена" : "ещё не запущена"));
+                if (pm) { while (!core.Running(g)) { stop.ThrowIfCancellationRequested(); Thread.Sleep(1000); } }
+                else Zamer.Sobrat(g.Exes, 0, t => { }, () => true, stop);
+                Zhurnal.Pishi("замер: игра есть, " + (uzheIdet ? "10 с" : "минута") + " на загрузку");
                 // минута на загрузку и вход в матч: экраны загрузки в замер не попадают
                 if (!uzheIdet) say("Игра запущена. Минута на загрузку — потом замер.");
                 for (int i = uzheIdet ? 10 : 60; i > 0; i--) { stop.ThrowIfCancellationRequested(); Thread.Sleep(1000); }
@@ -1963,6 +1994,7 @@ namespace RovnyFps
                 return pm ? Zamer.SobratPm(g.Exes, 120, hod, zaderzhki, stop) : Zamer.Sobrat(g.Exes, 120, hod, () => true, stop);
             }, stop);
             var it = Zamer.Poschitat(kadry);
+            Zhurnal.Pishi("замер: кадров " + kadry.Count + (it == null ? " — мало" : ", средний " + Itog.Chislo(it.Sredniy) + ", 1% low " + Itog.Chislo(it.Low1) + ", держит " + Itog.Chislo(it.Derzhit)));
             if (it == null) throw new Exception("Кадров слишком мало — замер не получился, попробуй ещё раз.");
             it.Tochno = pm;
             it.Poverh = pm ? Zamer.PoverhSekund : 0;
@@ -1979,7 +2011,7 @@ namespace RovnyFps
 
         // Обновления (Obnovlenie.cs): номер этой сборки и манифест в открытом репозитории.
         // Выпустить новую версию — vypustit.ps1 рядом (сам поднимает номер).
-        public const int Versiya = 3;
+        public const int Versiya = 4;
         public const string ManifestUrl = "https://raw.githubusercontent.com/mrraketa/rovny-fps/main/versiya.txt";
         public const string SupportUrl = "https://boosty.to/raketo4ka/donate";
 
@@ -2030,6 +2062,10 @@ namespace RovnyFps
 
             if (args.Length == 2 && args[0] == "--proverka") { RealCheck.Run(args[1]); return; }
             var core = new Core(); core.LoadState();
+            Zhurnal.Pishi("=== Ровный FPS версия " + Versiya + ", " + Environment.OSVersion + (Environment.Is64BitOperatingSystem ? " x64" : " x86") +
+                ", экран " + Core.MonitorHz() + " Гц, RivaTuner " + (core.RtssInstalled ? core.RtssDir : "не установлен") +
+                (Process.GetProcessesByName("RTSS").Length > 0 ? " (запущен)" : " (НЕ запущен)") + ", PresentMon " + (Zamer.PmEst ? "есть" : "нет") +
+                ", аргументы: " + string.Join(" ", args));
             try { core.FixOldProfiles(); } catch { }
             ThreadPool.QueueUserWorkItem(delegate { core.RefreshAutostart(); });
             if (args.Length >= 2 && (args[0] == "--off" || args[0] == "--on"))
@@ -2047,6 +2083,7 @@ namespace RovnyFps
 
         static void Oops(Exception ex)
         {
+            Zhurnal.Pishi("СБОЙ: " + ex);
             MessageBox.Show("Что-то пошло не так:\n\n" + (ex != null ? ex.Message : "неизвестная ошибка") +
                 "\n\nRivaTuner и Steam можно просто перезапустить — настройки игр сохранены.", "Ровный FPS", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
