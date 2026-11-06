@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 172" width="920" height="172" role="img" aria-label="+30% к 1% low в Deadlock; 59,5 из 60 в CS2; задержка вывода 19,0 мс против 19,6 мс">
+<rect width="920" height="172" rx="12" fill="#eef1f4"/>
+<rect x="22.0" y="22" width="284.0" height="128" rx="8" fill="#f8fafb" stroke="#d3dbe2"/>
+<text x="40.0" y="68.0" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="34" font-weight="700" fill="#d9792b" text-anchor="start">+30%</text>
+<text x="40.0" y="94.0" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="400" fill="#5b6a78" text-anchor="start">к 1% low в Deadlock: 92 против 70</text>
+<text x="40.0" y="112.0" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="400" fill="#5b6a78" text-anchor="start">у лимита игры при том же</text>
+<text x="40.0" y="130.0" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="400" fill="#5b6a78" text-anchor="start">среднем FPS</text>
+<rect x="318.0" y="22" width="284.0" height="128" rx="8" fill="#f8fafb" stroke="#d3dbe2"/>
+<text x="336.0" y="68.0" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="34" font-weight="700" fill="#d9792b" text-anchor="start">59,5 / 60</text>
+<text x="336.0" y="94.0" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="400" fill="#5b6a78" text-anchor="start">1% low в CS2 за 14 минут боя</text>
+<text x="336.0" y="112.0" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="400" fill="#5b6a78" text-anchor="start">с лимитом 60 — почти ни одного</text>
+<text x="336.0" y="130.0" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="400" fill="#5b6a78" text-anchor="start">кадра ниже</text>
+<rect x="614.0" y="22" width="284.0" height="128" rx="8" fill="#f8fafb" stroke="#d3dbe2"/>
+<text x="632.0" y="68.0" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="34" font-weight="700" fill="#d9792b" text-anchor="start">19,0 мс</text>
+<text x="632.0" y="94.0" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="400" fill="#5b6a78" text-anchor="start">задержка вывода с RivaTuner.</text>
+<text x="632.0" y="112.0" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="400" fill="#5b6a78" text-anchor="start">С лимитом игры — 19,6 мс</text>
+</svg>

@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 308" width="920" height="308" role="img" aria-label="1% low: Deadlock лимит 100 — RivaTuner 91,8, лимит игры 70,4; лимит 60 — 56,8 и 53,0; CS2 лимит 60 — 59,5">
+<rect width="920" height="308" rx="12" fill="#10161c"/>
+<line x1="232.0" y1="22" x2="232.0" y2="220" stroke="#26313c" stroke-width="1"/>
+<text x="232.0" y="236.0" font-family="Consolas, 'SF Mono', Menlo, 'DejaVu Sans Mono', monospace" font-size="11" font-weight="400" fill="#8d9cab" text-anchor="middle">0</text>
+<line x1="357.2" y1="22" x2="357.2" y2="220" stroke="#26313c" stroke-width="1"/>
+<text x="357.2" y="236.0" font-family="Consolas, 'SF Mono', Menlo, 'DejaVu Sans Mono', monospace" font-size="11" font-weight="400" fill="#8d9cab" text-anchor="middle">30</text>
+<line x1="482.4" y1="22" x2="482.4" y2="220" stroke="#26313c" stroke-width="1"/>
+<text x="482.4" y="236.0" font-family="Consolas, 'SF Mono', Menlo, 'DejaVu Sans Mono', monospace" font-size="11" font-weight="400" fill="#8d9cab" text-anchor="middle">60</text>
+<line x1="607.6" y1="22" x2="607.6" y2="220" stroke="#26313c" stroke-width="1"/>
+<text x="607.6" y="236.0" font-family="Consolas, 'SF Mono', Menlo, 'DejaVu Sans Mono', monospace" font-size="11" font-weight="400" fill="#8d9cab" text-anchor="middle">90</text>
+<line x1="732.8" y1="22" x2="732.8" y2="220" stroke="#26313c" stroke-width="1"/>
+<text x="732.8" y="236.0" font-family="Consolas, 'SF Mono', Menlo, 'DejaVu Sans Mono', monospace" font-size="11" font-weight="400" fill="#8d9cab" text-anchor="middle">120</text>
+<line x1="858.0" y1="22" x2="858.0" y2="220" stroke="#26313c" stroke-width="1"/>
+<text x="858.0" y="236.0" font-family="Consolas, 'SF Mono', Menlo, 'DejaVu Sans Mono', monospace" font-size="11" font-weight="400" fill="#8d9cab" text-anchor="middle">150</text>
+<text x="22.0" y="43.0" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="600" fill="#dce3ea" text-anchor="start">Deadlock, лимит 100</text>
+<text x="22.0" y="61.0" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="12" font-weight="400" fill="#8d9cab" text-anchor="start">одна сцена, средний FPS 100 и 99</text>
+<line x1="649.3" y1="25" x2="649.3" y2="78" stroke="#dce3ea" stroke-opacity=".55" stroke-width="2" stroke-dasharray="4 3"/>
+<rect x="232" y="30" width="383.1" height="18" rx="3" fill="#f0a04b"/>
+<rect x="618.1" y="30" width="40" height="18" fill="#10161c"/>
+<text x="622.1" y="44.0" font-family="Consolas, 'SF Mono', Menlo, 'DejaVu Sans Mono', monospace" font-size="12.5" font-weight="600" fill="#dce3ea" text-anchor="start">91,8</text>
+<rect x="232" y="54" width="293.8" height="18" rx="3" fill="#7f93a6"/>
+<rect x="528.8" y="54" width="40" height="18" fill="#10161c"/>
+<text x="532.8" y="68.0" font-family="Consolas, 'SF Mono', Menlo, 'DejaVu Sans Mono', monospace" font-size="12.5" font-weight="600" fill="#dce3ea" text-anchor="start">70,4</text>
+<text x="22.0" y="115.0" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="600" fill="#dce3ea" text-anchor="start">Deadlock, лимит 60</text>
+<text x="22.0" y="133.0" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="12" font-weight="400" fill="#8d9cab" text-anchor="start">долгих кадров в 10 раз меньше</text>
+<line x1="482.4" y1="97" x2="482.4" y2="150" stroke="#dce3ea" stroke-opacity=".55" stroke-width="2" stroke-dasharray="4 3"/>
+<rect x="232" y="102" width="237.0" height="18" rx="3" fill="#f0a04b"/>
+<rect x="472.0" y="102" width="40" height="18" fill="#10161c"/>
+<text x="476.0" y="116.0" font-family="Consolas, 'SF Mono', Menlo, 'DejaVu Sans Mono', monospace" font-size="12.5" font-weight="600" fill="#dce3ea" text-anchor="start">56,8</text>
+<rect x="232" y="126" width="221.2" height="18" rx="3" fill="#7f93a6"/>
+<rect x="456.2" y="126" width="40" height="18" fill="#10161c"/>
+<text x="460.2" y="140.0" font-family="Consolas, 'SF Mono', Menlo, 'DejaVu Sans Mono', monospace" font-size="12.5" font-weight="600" fill="#dce3ea" text-anchor="start">53,0</text>
+<text x="22.0" y="187.0" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="600" fill="#dce3ea" text-anchor="start">CS2, лимит 60 + Reflex</text>
+<text x="22.0" y="205.0" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="12" font-weight="400" fill="#8d9cab" text-anchor="start">14 минут настоящего боя</text>
+<line x1="482.4" y1="169" x2="482.4" y2="200" stroke="#dce3ea" stroke-opacity=".55" stroke-width="2" stroke-dasharray="4 3"/>
+<rect x="232" y="174" width="248.3" height="18" rx="3" fill="#3fbf98"/>
+<rect x="483.3" y="174" width="40" height="18" fill="#10161c"/>
+<text x="487.3" y="188.0" font-family="Consolas, 'SF Mono', Menlo, 'DejaVu Sans Mono', monospace" font-size="12.5" font-weight="600" fill="#dce3ea" text-anchor="start">59,5</text>
+<rect x="22" y="256" width="12" height="12" rx="2" fill="#f0a04b"/>
+<text x="41.0" y="266.0" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="400" fill="#8d9cab" text-anchor="start">лимит через RivaTuner</text>
+<rect x="212" y="256" width="12" height="12" rx="2" fill="#7f93a6"/>
+<text x="231.0" y="266.0" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="400" fill="#8d9cab" text-anchor="start">лимит в настройках игры</text>
+<rect x="417" y="256" width="12" height="12" rx="2" fill="#3fbf98"/>
+<text x="436.0" y="266.0" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="400" fill="#8d9cab" text-anchor="start">RivaTuner в бою</text>
+<line x1="569" y1="254" x2="569" y2="269" stroke="#dce3ea" stroke-opacity=".55" stroke-width="2" stroke-dasharray="4 3"/>
+<text x="579.0" y="266.0" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="400" fill="#8d9cab" text-anchor="start">поставленный лимит</text>
+<text x="22.0" y="292.0" font-family="Consolas, 'SF Mono', Menlo, 'DejaVu Sans Mono', monospace" font-size="11" font-weight="400" fill="#8d9cab" text-anchor="start">PresentMon 2.6 от Intel · Ryzen 5 5600XT, RTX 5070, 16 ГБ</text>
+</svg>
