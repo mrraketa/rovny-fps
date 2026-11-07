@@ -38,6 +38,7 @@ namespace RovnyFps
         public List<string> Custom = new List<string>();
         public HashSet<string> Ssync = new HashSet<string>();                      // «Без разрывов» (Scanline Sync)
         public bool ZamerIgr;                                                       // «Замер в игре»: мерить каждую катку в фоне
+        public bool SsyncZnaet;                                                     // окно «плюсы и минусы» «Без разрывов» уже видел
         string path;
 
         public static State Load(string path)
@@ -57,6 +58,7 @@ namespace RovnyFps
                     else if (p[0] == "custom" && p.Length >= 2) s.Custom.Add(p[1]);
                     else if (p[0] == "ssync" && p.Length >= 2) s.Ssync.Add(p[1]);
                     else if (p[0] == "zamer_igr") s.ZamerIgr = true;
+                    else if (p[0] == "ssync_znaet") s.SsyncZnaet = true;
                 }
                 catch (Exception) { } // битая строка — пропускаем, остальное читаем
             }
@@ -72,6 +74,7 @@ namespace RovnyFps
             foreach (var c in Custom) sb.Append("custom\t" + c + "\n");
             foreach (var k in Ssync) sb.Append("ssync\t" + k + "\n");
             if (ZamerIgr) sb.Append("zamer_igr\n");
+            if (SsyncZnaet) sb.Append("ssync_znaet\n");
             Disk.Write(path, sb.ToString(), new UTF8Encoding(false));
         }
     }
@@ -1142,7 +1145,7 @@ namespace RovnyFps
                     var cfg = Path.Combine(ProfilesDir, exe + ".cfg");
                     var bak = cfg + ".rovnyfps.bak";
                     if (File.Exists(cfg) && !St.On.ContainsKey(g.Key) && !File.Exists(bak)) File.Copy(cfg, bak);
-                    Disk.Write(cfg, Profile(fps, cs2, !cs2 && St.Ssync.Contains(g.Key)), Encoding.ASCII);
+                    Disk.Write(cfg, Profile(fps, cs2, St.Ssync.Contains(g.Key)), Encoding.ASCII);
                 }
                 St.On[g.Key] = fps; St.OnExes[g.Key] = string.Join(";", g.Exes); St.Fps[g.Key] = fps;
                 St.Save();
@@ -1235,7 +1238,7 @@ namespace RovnyFps
             {
                 foreach (var exe in g.Exes)
                 {
-                    if (St.On.ContainsKey(g.Key)) Disk.Write(Path.Combine(ProfilesDir, exe + ".cfg"), Profile(St.On[g.Key], g.AppId == "730", g.AppId != "730" && St.Ssync.Contains(g.Key)), Encoding.ASCII);
+                    if (St.On.ContainsKey(g.Key)) Disk.Write(Path.Combine(ProfilesDir, exe + ".cfg"), Profile(St.On[g.Key], g.AppId == "730", St.Ssync.Contains(g.Key)), Encoding.ASCII);
                     else RemoveProfile(exe);
                 }
             }
@@ -1312,6 +1315,7 @@ namespace RovnyFps
                     fill = !Enabled ? Ui.CardSel : down ? Color.FromArgb(212, 212, 216) : hover ? Color.White : Ui.Txt;
                     text = Enabled ? Ui.Bg : Ui.Muted; break;
                 case Kind.Chip:
+                    if (!Enabled) { fill = Selected ? Ui.CardSel : Ui.Bg; text = Ui.Faint; border = Selected ? Color.Empty : Ui.Card; break; }   // видно, что сейчас не нажать
                     fill = Selected ? Ui.Txt : down ? Ui.CardSel : hover ? Ui.CardHover : Ui.Card;
                     text = Selected ? Ui.Bg : hover ? Ui.Txt : Ui.Muted; border = Selected ? Color.Empty : Ui.Border; break;
                 default:
@@ -1463,6 +1467,127 @@ namespace RovnyFps
         }
     }
 
+    // Нарисованный кадр игры (небо, холмы, столбы): с разрывом верх сдвинут вбок, как при повороте камеры без синхронизации
+    class RazryvKartinka : Control
+    {
+        public bool Razryv;
+        public RazryvKartinka()
+        {
+            SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint | ControlStyles.ResizeRedraw, true);
+            BackColor = Ui.Bg; AccessibleRole = AccessibleRole.Graphic;
+        }
+
+        void Scena(Graphics g, int w, int h, float dx)
+        {
+            using (var nebo = new LinearGradientBrush(new Rectangle(0, 0, w, h), Color.FromArgb(52, 92, 150), Color.FromArgb(214, 160, 110), 90f))
+                g.FillRectangle(nebo, 0, 0, w, h);
+            using (var b = new SolidBrush(Color.FromArgb(255, 232, 170))) g.FillEllipse(b, w * 0.68f + dx, h * 0.14f, h * 0.22f, h * 0.22f);
+            using (var b = new SolidBrush(Color.FromArgb(70, 84, 110)))
+                g.FillPolygon(b, new[] { new PointF(-w + dx, h * 0.62f), new PointF(w * 0.18f + dx, h * 0.40f), new PointF(w * 0.42f + dx, h * 0.58f),
+                    new PointF(w * 0.70f + dx, h * 0.36f), new PointF(2 * w + dx, h * 0.62f) });
+            using (var b = new SolidBrush(Color.FromArgb(46, 70, 52))) g.FillRectangle(b, 0, h * 0.62f, w, h);
+            // столбы — на вертикалях разрыв виден лучше всего
+            float[] xs = { 0.08f, 0.30f, 0.52f, 0.80f };
+            for (int i = 0; i < xs.Length; i++)
+            {
+                float cx = w * xs[i] + dx, cw = w * (i % 2 == 0 ? 0.07f : 0.05f);
+                using (var b = new SolidBrush(Color.FromArgb(34, 34, 40))) g.FillRectangle(b, cx, h * 0.12f, cw, h);
+                using (var b = new SolidBrush(Color.FromArgb(90, 255, 255, 255))) g.FillRectangle(b, cx, h * 0.12f, Math.Max(1, cw * 0.25f), h);
+            }
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics; g.Clear(Parent != null ? Parent.BackColor : Ui.Bg); g.SmoothingMode = SmoothingMode.AntiAlias;
+            int w = Width, h = Height;
+            using (var ramka = Ui.Round(new RectangleF(0, 0, w - 1, h - 1), Ui.S(8)))
+            {
+                g.SetClip(ramka);
+                if (!Razryv) Scena(g, w, h, 0);
+                else
+                {
+                    float tear = h * 0.46f;
+                    var st = g.Save();
+                    g.SetClip(new RectangleF(0, tear, w, h), CombineMode.Intersect); Scena(g, w, h, 0);
+                    g.Restore(st); st = g.Save();
+                    g.SetClip(new RectangleF(0, 0, w, tear), CombineMode.Intersect); Scena(g, w, h, Ui.S(11));
+                    g.Restore(st);
+                    // указатель на линию разрыва
+                    using (var b = new SolidBrush(Ui.Amber))
+                        g.FillPolygon(b, new[] { new PointF(0, tear - Ui.S(5)), new PointF(Ui.S(7), tear), new PointF(0, tear + Ui.S(5)) });
+                }
+                g.ResetClip();
+                using (var pen = new Pen(Ui.Border)) g.DrawPath(pen, ramka);
+            }
+        }
+    }
+
+    // Небольшое окно в стиле программы: заголовок, строки «+ плюс» (зелёный) / «− минус» (жёлтый) / «• пояснение», кнопки
+    class Okno : Form
+    {
+        public static bool Pokazat(IWin32Window owner, string title, string[] lines, string ok, string cancel, bool razryvKartinki = false)
+        {
+            using (var f = new Okno(title, lines, ok, cancel, razryvKartinki)) return f.ShowDialog(owner) == DialogResult.OK;
+        }
+
+        Okno(string title, string[] lines, string ok, string cancel, bool razryvKartinki)
+        {
+            Func<float, int> S = v => Ui.S(v);
+            Text = "Ровный FPS"; Font = Ui.Body; BackColor = Ui.Bg; ForeColor = Ui.Txt;
+            FormBorderStyle = FormBorderStyle.FixedDialog; MaximizeBox = MinimizeBox = false; ShowInTaskbar = false;
+            StartPosition = FormStartPosition.CenterParent;
+            int w = S(380), x = S(22), tw = w - 2 * x - S(18), y = S(18);
+            var t = new Label { Text = title, Font = Ui.Name, ForeColor = Ui.Txt, AutoSize = false };
+            t.SetBounds(x, y, w - 2 * x, S(26)); Controls.Add(t); y += S(36);
+            if (razryvKartinki)
+            {
+                // «как выглядит»: слева кадр с разрывом, справа цельный
+                int kw = (w - 2 * x - S(12)) / 2, kh = kw * 9 / 16;
+                for (int i = 0; i < 2; i++)
+                {
+                    bool r = i == 0;
+                    var k = new RazryvKartinka { Razryv = r, AccessibleName = r ? "Без режима: кадр разорван полосой" : "С режимом: кадр цельный" };
+                    k.SetBounds(x + i * (kw + S(12)), y, kw, kh);
+                    var p = new Label { Text = r ? "Без него — кадр «рвётся»" : "С ним — кадр цельный", Font = Ui.Small,
+                        ForeColor = r ? Ui.Amber : Ui.Green, AutoSize = false, TextAlign = ContentAlignment.MiddleCenter };
+                    p.SetBounds(x + i * (kw + S(12)), y + kh + S(4), kw, S(18));
+                    Controls.Add(k); Controls.Add(p);
+                }
+                y += kh + S(34);
+            }
+            foreach (var ln in lines)
+            {
+                char z = ln.Length > 0 ? ln[0] : ' ';
+                Color c = z == '+' ? Ui.Green : z == '−' ? Ui.Amber : Ui.Muted;
+                string body = ln.Length > 2 ? ln.Substring(2) : ln;
+                int h = TextRenderer.MeasureText(body, Ui.Small, new Size(tw, 1000), TextFormatFlags.WordBreak).Height;
+                var zn = new Label { Text = z.ToString(), Font = Ui.SmallSemi, ForeColor = c, AutoSize = false };
+                zn.SetBounds(x, y, S(16), S(18));
+                var tx = new Label { Text = body, Font = Ui.Small, ForeColor = Ui.Txt, AutoSize = false };
+                tx.SetBounds(x + S(18), y, tw, h + S(2));
+                Controls.Add(zn); Controls.Add(tx);
+                y += h + S(10);
+            }
+            y += S(10);
+            var bOk = new Btn(Btn.Kind.Primary) { Text = ok };
+            bOk.Click += delegate { DialogResult = DialogResult.OK; Close(); };
+            if (cancel != null)
+            {
+                var bNo = new Btn(Btn.Kind.Secondary) { Text = cancel };
+                bNo.Click += delegate { DialogResult = DialogResult.Cancel; Close(); };
+                int bw = (w - 2 * x - S(10)) / 2;
+                bOk.SetBounds(x, y, bw, S(40)); bNo.SetBounds(x + bw + S(10), y, bw, S(40));
+                Controls.Add(bNo);
+            }
+            else bOk.SetBounds(x, y, w - 2 * x, S(40));
+            Controls.Add(bOk);
+            ClientSize = new Size(w, y + S(40) + S(18));
+            KeyPreview = true;
+            KeyDown += (s, e) => { if (e.KeyCode == Keys.Escape) { DialogResult = DialogResult.Cancel; Close(); } };
+            Shown += delegate { bOk.Focus(); };
+        }
+    }
+
     class MainForm : Form
     {
         readonly Core core;
@@ -1471,6 +1596,7 @@ namespace RovnyFps
         readonly Btn main = new Btn(Btn.Kind.Primary), off = new Btn(Btn.Kind.Secondary), minus = new Btn(Btn.Kind.Round), plus = new Btn(Btn.Kind.Round);
         readonly List<Btn> chips = new List<Btn>();
         readonly Btn ssync = new Btn(Btn.Kind.Chip) { Text = "Без разрывов" };   // Scanline Sync, справа в ряду чисел
+        readonly Btn ssyncChto = new Btn(Btn.Kind.Chip);                          // «?» — ещё раз показать, что это и как выглядит
         readonly Label value = new Label(), hint = new Label(), sub = new Label(), section = new Label();
         readonly LinkLabel other = new LinkLabel(), support = new LinkLabel(), podbor = new LinkLabel(), proverka = new LinkLabel(), zhurnal = new LinkLabel();
         bool pmOtkaz;   // отказался качать PresentMon или он не скачался — мерим буфером RivaTuner
@@ -1592,9 +1718,13 @@ namespace RovnyFps
             status.SetBounds(S(22), S(602), S(376), S(54));   // до трёх строк: итог замера «было / стало» с пометкой
 
             ssync.AccessibleName = "Без разрывов: подгонять кадры под экран (Scanline Sync)";
-            int sw = TextRenderer.MeasureText(ssync.Text, Ui.SmallSemi).Width + S(28);
-            ssync.SetBounds(S(398) - sw, S(502), sw, S(30));
+            int sw = TextRenderer.MeasureText(ssync.Text, Ui.SmallSemi).Width + S(22);
+            ssyncChto.Text = "?"; ssyncChto.AccessibleName = "Что такое «Без разрывов» — показать с картинками";
+            ssyncChto.SetBounds(S(398) - S(30), S(502), S(30), S(30));
+            ssyncChto.Click += delegate { ChtoTakoeSsync(); };
+            ssync.SetBounds(ssyncChto.Left - S(6) - sw, S(502), sw, S(30));
             ssync.Click += delegate { PereklyuchitSsync(); };
+            Controls.Add(ssyncChto);
 
             upd.Selected = true; upd.Visible = false;
             upd.Click += delegate { Obnovit(); };
@@ -1761,13 +1891,13 @@ namespace RovnyFps
             foreach (var v in vals)
             {
                 var c = new Btn(Btn.Kind.Chip) { Text = v.ToString(), Tag = v };
-                int w = TextRenderer.MeasureText(c.Text, Ui.SmallSemi).Width + Ui.S(28);
+                int w = TextRenderer.MeasureText(c.Text, Ui.SmallSemi).Width + Ui.S(20);
                 c.SetBounds(x, Ui.S(502), w, Ui.S(30));
                 c.AccessibleName = v + " кадров";
                 int vv = v;
                 c.Click += delegate { SetFps(vv); };
                 Controls.Add(c); chips.Add(c);
-                x += w + Ui.S(8);
+                x += w + Ui.S(6);
             }
             SetFps(fps);
         }
@@ -1792,12 +1922,14 @@ namespace RovnyFps
             // только CS2 настраивается через NVIDIA Reflex; обычный лимитер работает на любой видеокарте
             bool blocked = g != null && g.AppId == "730" && !on && !Core.Nvidia;
             main.Enabled = g != null && !busy && !blocked;
-            bool ss = g != null && core.St.Ssync.Contains(g.Key) && g.AppId != "730";
+            bool ss = g != null && core.St.Ssync.Contains(g.Key);
             ssync.Selected = ss; ssync.Invalidate();
-            ssync.Enabled = g != null && !busy && g.AppId != "730";   // в CS2 — режим из гайда (Reflex), с ним не совмещается
+            // в CS2 тоже: выбор за человеком, цену он видит в окне при первом включении
+            ssync.Enabled = g != null && !busy;
             minus.Enabled = plus.Enabled = g != null && !busy && !ss;
             foreach (var c in chips) c.Enabled = !busy && !ss;
-            hint.Text = ss ? "Кадры под экран " + hz + " Гц, без полосы разрыва. Нужен запас FPS."
+            value.ForeColor = ss ? Ui.Faint : Ui.Txt;   // число не действует, пока FPS = частота экрана
+            hint.Text = ss ? "FPS = частота экрана " + hz + ". Числа не действуют — выключи «Без разрывов»."
                            : "Чуть ниже FPS, который игра держит в драках. Экран: " + hz + " Гц";
             podbor.Enabled = proverka.Enabled = g != null && !busy && !blocked;
             vIgre.Text = "Замер в игре: " + (core.St.ZamerIgr ? (katka != null && katka.Idet ? "идёт" : "вкл") : "выкл");
@@ -1854,7 +1986,47 @@ namespace RovnyFps
 
         void PereklyuchitSsync()
         {
-            var g = list.Selected; if (g == null || busy || g.AppId == "730") return;
+            var g = list.Selected; if (g == null || busy) return;
+            if (!core.St.Ssync.Contains(g.Key) && !core.St.SsyncZnaet)
+            {
+                // первый раз — честно показать цену
+                if (!OknoSsync("Включить", "Отмена")) { Zhurnal.Pishi("без разрывов: отменил"); return; }
+                core.St.SsyncZnaet = true;
+            }
+            PereklyuchitSsyncBezOkna(g);
+        }
+
+        // Окно «что это и чего стоит» с картинками; цифры под его экран и выбранный лимит
+        bool OknoSsync(string ok, string cancel)
+        {
+            string fpsStroka = fps > hz ? "− FPS станет " + hz + " вместо твоих " + fps + ": задержка больше на " +
+                                          Itog.Chislo(1000.0 / hz - 1000.0 / fps) + " мс."
+                             : fps < hz ? "− FPS станет " + hz + " вместо твоих " + fps + ": компьютеру нужно больше сил."
+                             : "• FPS останется " + hz + ", как сейчас.";
+            Zhurnal.Pishi("без разрывов: окно «что это», экран " + hz + " Гц, лимит " + fps);
+            return Okno.Pokazat(this, "Без разрывов", new[] {
+                    "+ Нет полосы разрыва, когда крутишь камеру.",
+                    "+ Кадры выходят ровно под экран " + hz + " Гц.",
+                    fpsStroka,
+                    "− Нужен запас: если игра просядет ниже " + hz + " FPS, рывок будет заметнее, чем с обычным лимитом.",
+                    "− С G-Sync/FreeSync не нужен — они убирают разрывы лучше. VSync в игре выключи." },
+                    ok, cancel, true);
+        }
+
+        // «?»: посмотреть ещё раз; если режим выключен — можно сразу включить из окна
+        void ChtoTakoeSsync()
+        {
+            var g = list.Selected;
+            bool mozhno = g != null && !busy, vkl = g != null && core.St.Ssync.Contains(g.Key);
+            if (mozhno && !vkl)
+            {
+                if (OknoSsync("Включить", "Закрыть")) { core.St.SsyncZnaet = true; PereklyuchitSsyncBezOkna(g); }
+            }
+            else OknoSsync("Понятно", null);
+        }
+
+        void PereklyuchitSsyncBezOkna(Game g)
+        {
             if (!core.St.Ssync.Remove(g.Key)) core.St.Ssync.Add(g.Key);
             core.St.Save();
             if (core.St.On.ContainsKey(g.Key)) Run(true);   // включённой игре — сразу, на ходу
@@ -1958,7 +2130,7 @@ namespace RovnyFps
             Zhurnal.Pishi("проверка: " + g.Name + " (" + string.Join(", ", g.Exes) + "), лимит " + fps + ", экран " + hz + " Гц");
             if (!core.RtssInstalled) { status.Show("Сначала нажми «Включить» — нужен RivaTuner.", StatusLine.Tone.Warn); return; }
             // «Без разрывов» держит частоту экрана — сверяем с ней, а не с числом в поле
-            bool ss = core.St.Ssync.Contains(g.Key) && g.AppId != "730";
+            bool ss = core.St.Ssync.Contains(g.Key);
             int lim = ss ? hz : fps;
             podborStop = new CancellationTokenSource();
             var stop = podborStop.Token;
@@ -2068,7 +2240,7 @@ namespace RovnyFps
 
         // Обновления (Obnovlenie.cs): номер этой сборки и манифест в открытом репозитории.
         // Выпустить новую версию — vypustit.ps1 рядом (сам поднимает номер).
-        public const int Versiya = 7;
+        public const int Versiya = 8;
         public const string ManifestUrl = "https://raw.githubusercontent.com/mrraketa/rovny-fps/main/versiya.txt";
         public const string SupportUrl = "https://boosty.to/raketo4ka/donate";
 
@@ -2250,6 +2422,15 @@ namespace RovnyFps
                 var ir = Zamer.Poschitat(ryvkami);
                 Check(log, "подбор по рывкам: 1% low " + Itog.Chislo(ir.Low1) + ", держит " + Itog.Chislo(ir.Derzhit) + " → лимит " + Zamer.VybratLimit(ir.Derzhit, 60),
                     ir.Low1 < 50 && ir.Derzhit > 200 && Zamer.VybratLimit(ir.Derzhit, 60) == 60);
+                // замер в игре: от чего подвисание (кадр 80 мс)
+                string kor;
+                Func<int, float, float, float, Obrazec> sis = (mb, str, dsk, yad) => new Obrazec { SvobodnoMb = mb, VsegoMb = 16000, StranicVSek = str, ChtenieMb = dsk, MaxYadro = yad, Cpu = 30 };
+                Katka.Prichina(80, 10, 70, sis(3000, 0, 0, 40), out kor); Check(log, "причина: видеокарта 70 из 80 мс → " + kor, kor == "видеокарта");
+                Katka.Prichina(80, 78, 5, sis(400, 3000, 12, 40), out kor); Check(log, "причина: 400 МБ свободно, подкачка 3000/с → " + kor, kor == "не хватило памяти");
+                Katka.Prichina(80, 78, 5, sis(3000, 50, 120, 40), out kor); Check(log, "причина: память есть, диск 120 МБ/с → " + kor, kor == "чтение с диска");
+                Katka.Prichina(80, 78, 5, sis(3000, 0, 0, 100), out kor); Check(log, "причина: ядро 100% → " + kor, kor == "процессор");
+                Katka.Prichina(80, 78, 5, sis(3000, 20, 1, 60), out kor); Check(log, "причина: всё свободно → " + kor, kor == "заминка в игре или драйвере");
+                Katka.Prichina(80, -0.001, -0.001, null, out kor); Check(log, "причина: данных нет → " + kor, kor == "?");
                 var kadry = Enumerable.Repeat(16667, 9900).Concat(Enumerable.Repeat(33000, 90)).Concat(Enumerable.Repeat(80000, 10)).ToList();
                 var it = Zamer.Poschitat(kadry);
                 Check(log, "замер: 1% low " + Itog.Chislo(it.Low1) + ", 0,1% low " + Itog.Chislo(it.Low01), Math.Abs(it.Low1 - 30.3) < 0.1 && Math.Abs(it.Low01 - 12.5) < 0.1);
