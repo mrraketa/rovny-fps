@@ -10,7 +10,7 @@
 
 ![Окно программы](okno.png)
 
-**[Скачать RovnyFPS.exe](https://github.com/mrraketa/rovny-fps/raw/main/RovnyFPS.exe)** (195 КБ, Windows 10/11, установка не нужна)
+**[Скачать RovnyFPS.exe](https://github.com/mrraketa/rovny-fps/raw/main/RovnyFPS.exe)** (214 КБ, Windows 10/11, установка не нужна)
 
 ## Как это работает
 
