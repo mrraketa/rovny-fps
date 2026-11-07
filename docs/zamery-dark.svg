@@ -1,17 +1,17 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 380" width="920" height="380" role="img" aria-label="1% low: Deadlock лимит 100 — RivaTuner 91,8, лимит игры 70,4; в бою 66,1 и 58,0; лимит 60 — 56,8 и 53,0; CS2 лимит 60 — 59,5">
-<rect width="920" height="380" rx="12" fill="#10161c"/>
-<line x1="232.0" y1="22" x2="232.0" y2="292" stroke="#26313c" stroke-width="1"/>
-<text x="232.0" y="308.0" font-family="Consolas, 'SF Mono', Menlo, 'DejaVu Sans Mono', monospace" font-size="11" font-weight="400" fill="#8d9cab" text-anchor="middle">0</text>
-<line x1="357.2" y1="22" x2="357.2" y2="292" stroke="#26313c" stroke-width="1"/>
-<text x="357.2" y="308.0" font-family="Consolas, 'SF Mono', Menlo, 'DejaVu Sans Mono', monospace" font-size="11" font-weight="400" fill="#8d9cab" text-anchor="middle">30</text>
-<line x1="482.4" y1="22" x2="482.4" y2="292" stroke="#26313c" stroke-width="1"/>
-<text x="482.4" y="308.0" font-family="Consolas, 'SF Mono', Menlo, 'DejaVu Sans Mono', monospace" font-size="11" font-weight="400" fill="#8d9cab" text-anchor="middle">60</text>
-<line x1="607.6" y1="22" x2="607.6" y2="292" stroke="#26313c" stroke-width="1"/>
-<text x="607.6" y="308.0" font-family="Consolas, 'SF Mono', Menlo, 'DejaVu Sans Mono', monospace" font-size="11" font-weight="400" fill="#8d9cab" text-anchor="middle">90</text>
-<line x1="732.8" y1="22" x2="732.8" y2="292" stroke="#26313c" stroke-width="1"/>
-<text x="732.8" y="308.0" font-family="Consolas, 'SF Mono', Menlo, 'DejaVu Sans Mono', monospace" font-size="11" font-weight="400" fill="#8d9cab" text-anchor="middle">120</text>
-<line x1="858.0" y1="22" x2="858.0" y2="292" stroke="#26313c" stroke-width="1"/>
-<text x="858.0" y="308.0" font-family="Consolas, 'SF Mono', Menlo, 'DejaVu Sans Mono', monospace" font-size="11" font-weight="400" fill="#8d9cab" text-anchor="middle">150</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 452" width="920" height="452" role="img" aria-label="1% low: Deadlock лимит 100 — RivaTuner 91,8, лимит игры 70,4; в бою 66,1 и 58,0; лимит 60 — 56,8 и 53,0; CS2 лимит 100 в бою — 97,7 и 65,8; CS2 лимит 60 — 59,5">
+<rect width="920" height="452" rx="12" fill="#10161c"/>
+<line x1="232.0" y1="22" x2="232.0" y2="364" stroke="#26313c" stroke-width="1"/>
+<text x="232.0" y="380.0" font-family="Consolas, 'SF Mono', Menlo, 'DejaVu Sans Mono', monospace" font-size="11" font-weight="400" fill="#8d9cab" text-anchor="middle">0</text>
+<line x1="357.2" y1="22" x2="357.2" y2="364" stroke="#26313c" stroke-width="1"/>
+<text x="357.2" y="380.0" font-family="Consolas, 'SF Mono', Menlo, 'DejaVu Sans Mono', monospace" font-size="11" font-weight="400" fill="#8d9cab" text-anchor="middle">30</text>
+<line x1="482.4" y1="22" x2="482.4" y2="364" stroke="#26313c" stroke-width="1"/>
+<text x="482.4" y="380.0" font-family="Consolas, 'SF Mono', Menlo, 'DejaVu Sans Mono', monospace" font-size="11" font-weight="400" fill="#8d9cab" text-anchor="middle">60</text>
+<line x1="607.6" y1="22" x2="607.6" y2="364" stroke="#26313c" stroke-width="1"/>
+<text x="607.6" y="380.0" font-family="Consolas, 'SF Mono', Menlo, 'DejaVu Sans Mono', monospace" font-size="11" font-weight="400" fill="#8d9cab" text-anchor="middle">90</text>
+<line x1="732.8" y1="22" x2="732.8" y2="364" stroke="#26313c" stroke-width="1"/>
+<text x="732.8" y="380.0" font-family="Consolas, 'SF Mono', Menlo, 'DejaVu Sans Mono', monospace" font-size="11" font-weight="400" fill="#8d9cab" text-anchor="middle">120</text>
+<line x1="858.0" y1="22" x2="858.0" y2="364" stroke="#26313c" stroke-width="1"/>
+<text x="858.0" y="380.0" font-family="Consolas, 'SF Mono', Menlo, 'DejaVu Sans Mono', monospace" font-size="11" font-weight="400" fill="#8d9cab" text-anchor="middle">150</text>
 <text x="22.0" y="43.0" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="600" fill="#dce3ea" text-anchor="start">Deadlock, лимит 100</text>
 <text x="22.0" y="61.0" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="12" font-weight="400" fill="#8d9cab" text-anchor="start">одна сцена, средний FPS 100 и 99</text>
 <line x1="649.3" y1="25" x2="649.3" y2="78" stroke="#dce3ea" stroke-opacity=".55" stroke-width="2" stroke-dasharray="4 3"/>
@@ -39,19 +39,28 @@
 <rect x="232" y="198" width="221.2" height="18" rx="3" fill="#7f93a6"/>
 <rect x="456.2" y="198" width="40" height="18" fill="#10161c"/>
 <text x="460.2" y="212.0" font-family="Consolas, 'SF Mono', Menlo, 'DejaVu Sans Mono', monospace" font-size="12.5" font-weight="600" fill="#dce3ea" text-anchor="start">53,0</text>
-<text x="22.0" y="259.0" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="600" fill="#dce3ea" text-anchor="start">CS2, лимит 60 + Reflex</text>
-<text x="22.0" y="277.0" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="12" font-weight="400" fill="#8d9cab" text-anchor="start">14 минут настоящего боя</text>
-<line x1="482.4" y1="241" x2="482.4" y2="272" stroke="#dce3ea" stroke-opacity=".55" stroke-width="2" stroke-dasharray="4 3"/>
-<rect x="232" y="246" width="248.3" height="18" rx="3" fill="#3fbf98"/>
-<rect x="483.3" y="246" width="40" height="18" fill="#10161c"/>
-<text x="487.3" y="260.0" font-family="Consolas, 'SF Mono', Menlo, 'DejaVu Sans Mono', monospace" font-size="12.5" font-weight="600" fill="#dce3ea" text-anchor="start">59,5</text>
-<rect x="22" y="328" width="12" height="12" rx="2" fill="#f0a04b"/>
-<text x="41.0" y="338.0" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="400" fill="#8d9cab" text-anchor="start">лимит через RivaTuner</text>
-<rect x="212" y="328" width="12" height="12" rx="2" fill="#7f93a6"/>
-<text x="231.0" y="338.0" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="400" fill="#8d9cab" text-anchor="start">лимит в настройках игры</text>
-<rect x="417" y="328" width="12" height="12" rx="2" fill="#3fbf98"/>
-<text x="436.0" y="338.0" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="400" fill="#8d9cab" text-anchor="start">RivaTuner + Reflex (CS2)</text>
-<line x1="624" y1="326" x2="624" y2="341" stroke="#dce3ea" stroke-opacity=".55" stroke-width="2" stroke-dasharray="4 3"/>
-<text x="634.0" y="338.0" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="400" fill="#8d9cab" text-anchor="start">поставленный лимит</text>
-<text x="22.0" y="364.0" font-family="Consolas, 'SF Mono', Menlo, 'DejaVu Sans Mono', monospace" font-size="11" font-weight="400" fill="#8d9cab" text-anchor="start">PresentMon 2.6 от Intel · Ryzen 5 5600XT, RTX 5070, 16 ГБ</text>
+<text x="22.0" y="259.0" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="600" fill="#dce3ea" text-anchor="start">CS2, лимит 100, бой</text>
+<text x="22.0" y="277.0" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="12" font-weight="400" fill="#8d9cab" text-anchor="start">6 матчей, худший кадр секунды</text>
+<line x1="649.3" y1="241" x2="649.3" y2="294" stroke="#dce3ea" stroke-opacity=".55" stroke-width="2" stroke-dasharray="4 3"/>
+<rect x="232" y="246" width="407.7" height="18" rx="3" fill="#f0a04b"/>
+<rect x="642.7" y="246" width="40" height="18" fill="#10161c"/>
+<text x="646.7" y="260.0" font-family="Consolas, 'SF Mono', Menlo, 'DejaVu Sans Mono', monospace" font-size="12.5" font-weight="600" fill="#dce3ea" text-anchor="start">97,7</text>
+<rect x="232" y="270" width="274.6" height="18" rx="3" fill="#7f93a6"/>
+<rect x="509.6" y="270" width="40" height="18" fill="#10161c"/>
+<text x="513.6" y="284.0" font-family="Consolas, 'SF Mono', Menlo, 'DejaVu Sans Mono', monospace" font-size="12.5" font-weight="600" fill="#dce3ea" text-anchor="start">65,8</text>
+<text x="22.0" y="331.0" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="600" fill="#dce3ea" text-anchor="start">CS2, лимит 60 + Reflex</text>
+<text x="22.0" y="349.0" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="12" font-weight="400" fill="#8d9cab" text-anchor="start">14 минут настоящего боя</text>
+<line x1="482.4" y1="313" x2="482.4" y2="344" stroke="#dce3ea" stroke-opacity=".55" stroke-width="2" stroke-dasharray="4 3"/>
+<rect x="232" y="318" width="248.3" height="18" rx="3" fill="#3fbf98"/>
+<rect x="483.3" y="318" width="40" height="18" fill="#10161c"/>
+<text x="487.3" y="332.0" font-family="Consolas, 'SF Mono', Menlo, 'DejaVu Sans Mono', monospace" font-size="12.5" font-weight="600" fill="#dce3ea" text-anchor="start">59,5</text>
+<rect x="22" y="400" width="12" height="12" rx="2" fill="#f0a04b"/>
+<text x="41.0" y="410.0" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="400" fill="#8d9cab" text-anchor="start">лимит через RivaTuner</text>
+<rect x="212" y="400" width="12" height="12" rx="2" fill="#7f93a6"/>
+<text x="231.0" y="410.0" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="400" fill="#8d9cab" text-anchor="start">лимит в настройках игры</text>
+<rect x="417" y="400" width="12" height="12" rx="2" fill="#3fbf98"/>
+<text x="436.0" y="410.0" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="400" fill="#8d9cab" text-anchor="start">RivaTuner + Reflex (CS2)</text>
+<line x1="624" y1="398" x2="624" y2="413" stroke="#dce3ea" stroke-opacity=".55" stroke-width="2" stroke-dasharray="4 3"/>
+<text x="634.0" y="410.0" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="400" fill="#8d9cab" text-anchor="start">поставленный лимит</text>
+<text x="22.0" y="436.0" font-family="Consolas, 'SF Mono', Menlo, 'DejaVu Sans Mono', monospace" font-size="11" font-weight="400" fill="#8d9cab" text-anchor="start">PresentMon 2.6 от Intel · Ryzen 5 5600XT, RTX 5070, 16 ГБ</text>
 </svg>
