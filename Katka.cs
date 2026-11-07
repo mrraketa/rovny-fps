@@ -70,10 +70,23 @@ namespace RovnyFps
         void Nablyudat()
         {
             IntPtr oknoIgry = IntPtr.Zero; DateTime iskal = DateTime.MinValue;
-            Pribory pr = null; int tik = 0;
+            Pribory pr = null; int tik = 0; DateTime igraZhilaDo = DateTime.UtcNow;
             while (!stop)
             {
                 if (tik++ % 4 == 0)
+                {
+                    // 07.11: игра закрылась, а PresentMon с --terminate_on_proc_exit висел 10+ мин — итог не писался.
+                    // Игры нет 15 с — закрываем PresentMon сами, чтение кончится и итог посчитается.
+                    bool zhiva = g.Exes.Any(e => Process.GetProcessesByName(Path.GetFileNameWithoutExtension(e)).Length > 0);
+                    if (zhiva || pidIgry == 0) igraZhilaDo = DateTime.UtcNow;
+                    else if ((DateTime.UtcNow - igraZhilaDo).TotalSeconds > 15)
+                    {
+                        var p = pm;
+                        try { if (p != null && !p.HasExited) { Zhurnal.Pishi("замер в игре: игры нет 15 с, а PresentMon не вышел — закрываю его"); p.Kill(); } } catch (Exception) { }
+                        igraZhilaDo = DateTime.UtcNow;
+                    }
+                }
+                if (tik % 4 == 1)
                 {
                     try
                     {

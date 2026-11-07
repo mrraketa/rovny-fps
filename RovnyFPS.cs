@@ -2240,7 +2240,7 @@ namespace RovnyFps
 
         // Обновления (Obnovlenie.cs): номер этой сборки и манифест в открытом репозитории.
         // Выпустить новую версию — vypustit.ps1 рядом (сам поднимает номер).
-        public const int Versiya = 8;
+        public const int Versiya = 9;
         public const string ManifestUrl = "https://raw.githubusercontent.com/mrraketa/rovny-fps/main/versiya.txt";
         public const string SupportUrl = "https://boosty.to/raketo4ka/donate";
 
