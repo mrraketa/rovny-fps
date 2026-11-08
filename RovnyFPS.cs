@@ -833,7 +833,25 @@ namespace RovnyFps
                 "[RendererVulkan]", "Implementation=2", "" });
         }
 
-        static readonly string[] RtssProcs = { "RTSS", "RTSSHooksLoader", "RTSSHooksLoader64", "EncoderServer", "EncoderServer64" };
+        // Профиль, который записала сама программа (а не игрок). Если состояние потерялось, такой профиль
+        // нельзя сохранять в .bak как «прежний» — иначе «Выключить» вернёт наш же лимит.
+        public static bool NashProfile(string path)
+        {
+            try
+            {
+                if (!File.Exists(path)) return false;
+                var text = File.ReadAllText(path, Encoding.ASCII);
+                var lim = Regex.Match(text, @"^Limit=(\d+)\r?$", RegexOptions.Multiline);
+                if (!lim.Success) return false;
+                int fps = int.Parse(lim.Groups[1].Value);
+                bool reflex = Regex.IsMatch(text, @"^SyncLimiter=3\r?$", RegexOptions.Multiline);
+                bool ssync = Regex.IsMatch(text, @"^SyncTimeout=1\r?$", RegexOptions.Multiline);
+                return text == Profile(fps, reflex, ssync);
+            }
+            catch { return false; }
+        }
+
+        static readonly string[] RtssProcs ={ "RTSS", "RTSSHooksLoader", "RTSSHooksLoader64", "EncoderServer", "EncoderServer64" };
 
         // Сначала просим RivaTuner закрыться самому (WM_CLOSE его окнам): тогда он снимает хуки
         // из запущенных игр и сохраняет настройки. Kill — только если за 5 с не закрылся.
@@ -1144,7 +1162,7 @@ namespace RovnyFps
                 {
                     var cfg = Path.Combine(ProfilesDir, exe + ".cfg");
                     var bak = cfg + ".rovnyfps.bak";
-                    if (File.Exists(cfg) && !St.On.ContainsKey(g.Key) && !File.Exists(bak)) File.Copy(cfg, bak);
+                    if (File.Exists(cfg) && !St.On.ContainsKey(g.Key) && !File.Exists(bak) && !NashProfile(cfg)) File.Copy(cfg, bak);
                     Disk.Write(cfg, Profile(fps, cs2, St.Ssync.Contains(g.Key)), Encoding.ASCII);
                 }
                 St.On[g.Key] = fps; St.OnExes[g.Key] = string.Join(";", g.Exes); St.Fps[g.Key] = fps;
@@ -1163,8 +1181,13 @@ namespace RovnyFps
         {
             var cfg = Path.Combine(ProfilesDir, exe + ".cfg");
             var bak = cfg + ".rovnyfps.bak";
-            if (File.Exists(bak)) { File.Copy(bak, cfg, true); File.Delete(bak); }
-            else if (File.Exists(cfg)) File.Delete(cfg);
+            // .bak с нашим же профилем (сохранён старой версией после потери состояния) — не игрока, не возвращаем
+            if (File.Exists(bak) && !NashProfile(bak)) { File.Copy(bak, cfg, true); File.Delete(bak); }
+            else
+            {
+                if (File.Exists(bak)) File.Delete(bak);
+                if (File.Exists(cfg)) File.Delete(cfg);
+            }
         }
 
         // Профили, записанные старой версией с Reflex для всех игр, переписываем на обычный лимитер
@@ -1225,7 +1248,7 @@ namespace RovnyFps
                 {
                     var cfg = Path.Combine(ProfilesDir, exe + ".cfg");
                     var bak = cfg + ".rovnyfps.bak";
-                    if (File.Exists(cfg) && !St.On.ContainsKey(g.Key) && !File.Exists(bak)) File.Copy(cfg, bak);
+                    if (File.Exists(cfg) && !St.On.ContainsKey(g.Key) && !File.Exists(bak) && !NashProfile(cfg)) File.Copy(cfg, bak);
                     Disk.Write(cfg, Profile(0, false), Encoding.ASCII);
                 }
             }
@@ -2240,7 +2263,7 @@ namespace RovnyFps
 
         // Обновления (Obnovlenie.cs): номер этой сборки и манифест в открытом репозитории.
         // Выпустить новую версию — vypustit.ps1 рядом (сам поднимает номер).
-        public const int Versiya = 9;
+        public const int Versiya = 10;
         public const string ManifestUrl = "https://raw.githubusercontent.com/mrraketa/rovny-fps/main/versiya.txt";
         public const string SupportUrl = "https://boosty.to/raketo4ka/donate";
 
@@ -2471,6 +2494,20 @@ namespace RovnyFps
                 Check(log, "чужой профиль сохранён в .bak", File.Exists(Path.Combine(c.ProfilesDir, "bg3.exe.cfg.rovnyfps.bak")));
                 c.Disable(bg);
                 Check(log, "чужой профиль вернулся", File.ReadAllText(Path.Combine(c.ProfilesDir, "bg3.exe.cfg")) == "чужой профиль" && !File.Exists(Path.Combine(c.ProfilesDir, "bg3_dx11.exe.cfg")));
+                // состояние потерялось, а наш профиль с лимитом остался: это не профиль игрока
+                var dl = new Game { Key = "1422450", AppId = "1422450", Name = "Deadlock", Exes = { "deadlock.exe" } };
+                var dlCfg = Path.Combine(c.ProfilesDir, "deadlock.exe.cfg");
+                File.WriteAllText(dlCfg, Core.Profile(60, false), Encoding.ASCII);
+                c.Enable(dl, 100, s => { });
+                Check(log, "свой профиль не сохранён как прежний", !File.Exists(dlCfg + ".rovnyfps.bak"));
+                c.Disable(dl);
+                Check(log, "«Выключить» не вернул наш старый лимит", !File.Exists(dlCfg));
+                // .bak с нашим профилем от старой версии — тоже не возвращаем
+                File.WriteAllText(dlCfg, Core.Profile(100, false), Encoding.ASCII);
+                File.WriteAllText(dlCfg + ".rovnyfps.bak", Core.Profile(60, false), Encoding.ASCII);
+                c.St.On[dl.Key] = 100; c.St.OnExes[dl.Key] = "deadlock.exe";
+                c.Disable(dl);
+                Check(log, "старый .bak с нашим лимитом убран", !File.Exists(dlCfg) && !File.Exists(dlCfg + ".rovnyfps.bak"));
                 var cs = new Game { Key = "730", AppId = "730", Name = "CS2", Exes = { "cs2.exe" } };
                 c.Enable(cs, 240, s => { });
                 var lc = Path.Combine(ud, "localconfig.vdf");
