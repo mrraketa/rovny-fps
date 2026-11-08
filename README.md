@@ -10,6 +10,8 @@
 
 ![Окно программы](okno.png)
 
+**[▶ Ролик: Deadlock без лимита и с программой](docs/rolik.mp4)** (15 с) — без лимита FPS скачет от 91 до 153, с программой держится 98–100.
+
 **[Скачать RovnyFPS.exe](https://github.com/mrraketa/rovny-fps/raw/main/RovnyFPS.exe)** (215 КБ, Windows 10/11, установка не нужна)
 
 ## Как это работает
