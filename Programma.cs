@@ -135,7 +135,7 @@ namespace FpsMaster
                new[] { "vbs", "dvr", "chastota", "rebar", "tv:prio", "pitanie:a.exe" }.All(x => !MainForm.Skryt(new Proverka { Id = x })), "убранные пункты скрыты, остальные видны");
             // закрытие окна посреди работы ограничения: вложенное окно умеет отказать (иначе Steam останется закрытым)
             ok(typeof(RovnyFps.MainForm).GetMethod("MozhnoZakryt") != null && typeof(RovnyFps.MainForm).GetMethod("Vklyuchena") != null, "вложенное окно ограничения отвечает на закрытие и знает включённые игры");
-            // обновления: манифест новее — предложить, такой же — молчать; адрес — не открытый репозиторий версии 10
+            // обновления: манифест новее — предложить, такой же — молчать; адрес — открытый rovny-fps, общий с версией 10
             try
             {
                 var mf = Path.Combine(Path.GetTempPath(), "rovnyfps-manifest.txt");

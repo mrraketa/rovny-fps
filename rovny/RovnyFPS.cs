@@ -1980,7 +1980,7 @@ namespace RovnyFps
         {
             base.OnShown(e);
             if (!Loaded && !Vnutri) Reload(null);   // во встроенном режиме список грузит общее окно
-            if (!Vnutri) ProveritObnovlenie();   // общая программа ещё не выпускалась — обновляться не из чего
+            if (!Vnutri) ProveritObnovlenie();   // внутри общего окна обновления проверяет общее окно (Okno.cs)
         }
 
         async void ProveritObnovlenie()
