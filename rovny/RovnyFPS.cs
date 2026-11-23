@@ -1,4 +1,4 @@
-// Ровный FPS: ставит игре лимит кадров через RivaTuner (режим NVIDIA Reflex),
+﻿// Ровный FPS: ставит игре лимит кадров через RivaTuner (режим NVIDIA Reflex),
 // как в гайде Pqqip Production (youtube.com/watch?v=EHgBdsNGjvM). Сборка: build.bat (csc из .NET Framework 4.x, C# 5).
 using System;
 using System.Collections.Generic;
@@ -1272,10 +1272,93 @@ namespace RovnyFps
     // ---------------- Окно ----------------
     static class Ui
     {
-        public static readonly Color Bg = Color.FromArgb(14, 14, 16), Card = Color.FromArgb(24, 24, 27), CardHover = Color.FromArgb(32, 32, 36),
-            CardSel = Color.FromArgb(39, 39, 44), Border = Color.FromArgb(58, 58, 64), BorderSel = Color.FromArgb(96, 96, 104),
-            Txt = Color.FromArgb(244, 244, 245), Muted = Color.FromArgb(150, 150, 158), Faint = Color.FromArgb(82, 82, 91),
-            Green = Color.FromArgb(74, 222, 128), Amber = Color.FromArgb(251, 191, 36), Red = Color.FromArgb(248, 113, 113);
+        // Палитра — одна на всё окно. Тема оболочки («Коробка» присылает свои цвета) подменяет её целиком;
+        // без оболочки (Tema == null) — ровно свой вид. Смысловые цвета (зелёный/жёлтый/красный) — свои,
+        // на светлых темах темнее, чтобы читались на светлом фоне.
+        public static Color Bg, Card, CardHover, CardSel, Border, BorderSel, Txt, Muted, Faint, Green, Amber, Red,
+            Txt2, Gluhoy,                                   // текст пояснений, приглушённая подложка
+            Akcent, NaAkcente, AkcentHover, AkcentDown;     // главная кнопка и выбранный чип
+        public static int Rad;                              // скругление кнопок, px при 100 %
+        public static TemaObolochki Tema;                   // какая тема сейчас (null — своя)
+        static Ui() { Primenit(null); }
+
+        static Color C(int rgb) { return Color.FromArgb(255, Color.FromArgb(rgb)); }
+        public static Color Mix(Color a, Color b, double t)
+        {
+            return Color.FromArgb((int)Math.Round(a.R + (b.R - a.R) * t), (int)Math.Round(a.G + (b.G - a.G) * t), (int)Math.Round(a.B + (b.B - a.B) * t));
+        }
+        static Color[] Tek() { return new[] { Bg, Card, CardHover, CardSel, Border, BorderSel, Txt, Muted, Faint, Green, Amber, Red, Txt2, Gluhoy }; }
+
+        // Возвращает, какой цвет каким стал, — чтобы перекрасить уже созданные элементы (Perekrasit)
+        public static Dictionary<int, Color> Primenit(TemaObolochki t)
+        {
+            var bylo = Bg.IsEmpty ? null : Tek();
+            Tema = t;
+            if (t == null)
+            {
+                Bg = Color.FromArgb(14, 14, 16); Card = Color.FromArgb(24, 24, 27); CardHover = Color.FromArgb(32, 32, 36);
+                CardSel = Color.FromArgb(39, 39, 44); Border = Color.FromArgb(58, 58, 64); BorderSel = Color.FromArgb(96, 96, 104);
+                Txt = Color.FromArgb(244, 244, 245); Muted = Color.FromArgb(150, 150, 158); Faint = Color.FromArgb(82, 82, 91);
+                Green = Color.FromArgb(74, 222, 128); Amber = Color.FromArgb(251, 191, 36); Red = Color.FromArgb(248, 113, 113);
+                Txt2 = Color.FromArgb(214, 214, 218); Gluhoy = Color.FromArgb(18, 18, 20);
+                Akcent = Txt; NaAkcente = Bg; AkcentHover = Color.White; AkcentDown = Color.FromArgb(212, 212, 216);
+                Rad = 10;
+            }
+            else
+            {
+                Bg = C(t.Fon); Card = C(t.Poverhnost); CardSel = C(t.Navedenie); CardHover = Mix(Card, CardSel, 0.5);
+                Border = C(t.Liniya); Txt = C(t.Tekst); Muted = C(t.Vtorichnyy); BorderSel = Mix(Border, Txt, 0.35);
+                Faint = Mix(Muted, Bg, 0.45); Txt2 = Mix(Txt, Muted, 0.25); Gluhoy = Mix(Bg, Card, 0.4);
+                Akcent = C(t.Akcent); NaAkcente = C(t.NaAkcente);
+                AkcentHover = Mix(Akcent, t.Temnaya ? Color.White : Color.Black, 0.1); AkcentDown = Mix(Akcent, t.Temnaya ? Color.Black : Color.Black, t.Temnaya ? 0.18 : 0.2);
+                if (t.Temnaya) { Green = Color.FromArgb(74, 222, 128); Amber = Color.FromArgb(251, 191, 36); Red = Color.FromArgb(248, 113, 113); }
+                else { Green = Color.FromArgb(21, 128, 61); Amber = Color.FromArgb(180, 83, 9); Red = Color.FromArgb(200, 40, 40); }
+                Rad = Math.Max(2, Math.Min(18, t.Radius));
+            }
+            var map = new Dictionary<int, Color>();
+            if (bylo != null)
+            {
+                var stalo = Tek();
+                for (int i = 0; i < bylo.Length; i++) if (!map.ContainsKey(bylo[i].ToArgb())) map[bylo[i].ToArgb()] = stalo[i];
+            }
+            return map;
+        }
+
+        // Перекрасить уже созданные элементы: каждый цвет старой палитры — в его цвет новой
+        public static void Perekrasit(Control c, Dictionary<int, Color> map)
+        {
+            Color n;
+            if (map.TryGetValue(c.BackColor.ToArgb(), out n)) c.BackColor = n;
+            if (map.TryGetValue(c.ForeColor.ToArgb(), out n)) c.ForeColor = n;
+            var l = c as LinkLabel;
+            if (l != null)
+            {
+                if (map.TryGetValue(l.LinkColor.ToArgb(), out n)) l.LinkColor = n;
+                if (map.TryGetValue(l.ActiveLinkColor.ToArgb(), out n)) l.ActiveLinkColor = n;
+                if (map.TryGetValue(l.VisitedLinkColor.ToArgb(), out n)) l.VisitedLinkColor = n;
+            }
+            foreach (Control d in c.Controls) Perekrasit(d, map);
+            c.Invalidate();
+        }
+
+        // Темы «Коробки» (korobka\TEMY.md) — только для снимков (--shot … tema=id): так окно проверяется без оболочки
+        public static TemaObolochki ProbnayaTema(string id)
+        {
+            switch (id)
+            {
+                case "klassika": return T(0x151517, 0x1F1F22, 0xF4F4F5, 0x9E9EA6, 0xFFFFFF, 0x09090A, 0x323234, 0xF4F4F5, 0x4C4C52, 0x343437, 10, true);
+                case "grafit": return T(0x2B2D31, 0x313338, 0xF2F3F5, 0x949BA4, 0x5AA2FF, 0x0A1626, 0x4E5054, 0x3FB56B, 0x5D6068, 0x44464A, 4, true);
+                case "sumerki": return T(0x2C3443, 0x333C4C, 0xEBE1CB, 0xA3A9B5, 0xCB5A3F, 0xEBE1CB, 0x585C63, 0xA9BC4D, 0x5F6979, 0x454C58, 8, true);
+                case "bumaga": return T(0xECE5D4, 0xF3EEE2, 0x2E251C, 0x75664F, 0xB6472F, 0xF3EEE2, 0xB7B0A1, 0x7C9530, 0xADA18C, 0xD2C7AF, 8, false);
+                case "svetloe": return T(0xF5F7FA, 0xFFFFFF, 0x1A1C21, 0x5F6980, 0x2563EB, 0xFFFFFF, 0xD6D8DB, 0x1F9A56, 0xB4BBC8, 0xD7DCE6, 9, false);
+                case "pastel": return T(0xFCF7FB, 0xFFFFFF, 0x473B53, 0x786A86, 0x8F62C9, 0xFFFFFF, 0xE6E0E7, 0x4FB088, 0xD1C3DB, 0xE6D6EB, 15, false);
+            }
+            return null;
+        }
+        static TemaObolochki T(int fon, int pov, int tek, int vt, int ak, int na, int li, int vkl, int vykl, int nav, int r, bool temn)
+        {
+            return new TemaObolochki { Fon = fon, Poverhnost = pov, Tekst = tek, Vtorichnyy = vt, Akcent = ak, NaAkcente = na, Liniya = li, Vkl = vkl, Vykl = vykl, Navedenie = nav, Radius = r, Temnaya = temn };
+        }
         public static float K = 1f;
         public static int S(float v) { return (int)Math.Round(v * K); }
         public static readonly Font Title = new Font("Segoe UI Semibold", 15.5f), Body = new Font("Segoe UI", 10f),
@@ -1335,18 +1418,18 @@ namespace RovnyFps
             switch (kind)
             {
                 case Kind.Primary:
-                    fill = !Enabled ? Ui.CardSel : down ? Color.FromArgb(212, 212, 216) : hover ? Color.White : Ui.Txt;
-                    text = Enabled ? Ui.Bg : Ui.Muted; break;
+                    fill = !Enabled ? Ui.CardSel : down ? Ui.AkcentDown : hover ? Ui.AkcentHover : Ui.Akcent;
+                    text = Enabled ? Ui.NaAkcente : Ui.Muted; break;
                 case Kind.Chip:
                     if (!Enabled) { fill = Selected ? Ui.CardSel : Ui.Bg; text = Ui.Faint; border = Selected ? Color.Empty : Ui.Card; break; }   // видно, что сейчас не нажать
-                    fill = Selected ? Ui.Txt : down ? Ui.CardSel : hover ? Ui.CardHover : Ui.Card;
-                    text = Selected ? Ui.Bg : hover ? Ui.Txt : Ui.Muted; border = Selected ? Color.Empty : Ui.Border; break;
+                    fill = Selected ? Ui.Akcent : down ? Ui.CardSel : hover ? Ui.CardHover : Ui.Card;
+                    text = Selected ? Ui.NaAkcente : hover ? Ui.Txt : Ui.Muted; border = Selected ? Color.Empty : Ui.Border; break;
                 default:
                     fill = down ? Ui.CardSel : hover ? Ui.CardHover : Ui.Card;
                     text = Enabled ? Ui.Txt : Ui.Faint; border = hover ? Ui.BorderSel : Ui.Border; break;
             }
             var r = new RectangleF(0.5f, 0.5f, Width - 1.5f, Height - 1.5f);
-            float rad = kind == Kind.Chip || kind == Kind.Round ? Height / 2f : Ui.S(11);
+            float rad = kind == Kind.Chip || kind == Kind.Round ? Height / 2f : Ui.S(Ui.Rad + 1);
             Ui.Fill(g, r, rad, fill, border);
             if (Focused && ShowFocusCues) using (var p = Ui.Round(new RectangleF(2, 2, Width - 5, Height - 5), rad - 2)) using (var pen = new Pen(Color.FromArgb(120, Ui.Green))) g.DrawPath(pen, p);
             var f = kind == Kind.Round ? Ui.Glyph : kind == Kind.Chip ? Ui.SmallSemi : Ui.Button;
@@ -1416,7 +1499,7 @@ namespace RovnyFps
             var g = e.Graphics; g.Clear(Ui.Bg); g.SmoothingMode = SmoothingMode.AntiAlias;
             if (Items.Count == 0)
             {
-                Ui.Fill(g, new RectangleF(0.5f, 0.5f, Width - 1.5f, Height - 1.5f), Ui.S(12), Ui.Bg, Ui.Border);
+                Ui.Fill(g, new RectangleF(0.5f, 0.5f, Width - 1.5f, Height - 1.5f), Ui.S(Ui.Rad + 2), Ui.Bg, Ui.Border);
                 TextRenderer.DrawText(g, Empty, Ui.Body, ClientRectangle, Ui.Muted, Ui.Bg,
                     TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.WordBreak);
                 return;
@@ -1429,7 +1512,7 @@ namespace RovnyFps
                 var game = Items[i];
                 bool isSel = i == sel, isHover = i == hover;
                 var r = new RectangleF(0.5f, y + 0.5f, w - 1.5f, RowH - 1);
-                Ui.Fill(g, r, Ui.S(12), isSel ? Ui.CardSel : isHover ? Ui.CardHover : Ui.Card, isSel ? Ui.BorderSel : Color.Empty);
+                Ui.Fill(g, r, Ui.S(Ui.Rad + 2), isSel ? Ui.CardSel : isHover ? Ui.CardHover : Ui.Card, isSel ? Ui.BorderSel : Color.Empty);
 
                 int right = w - Ui.S(14);
                 var fps = OnFps(game);
@@ -1635,10 +1718,29 @@ namespace RovnyFps
         int fps = 60, hz = 60, step, held;
         bool busy, otherUser;
         public bool Loaded;
-
-        public MainForm(Core c)
+        // ---- режим «внутри общего окна» (левая колонка): та же логика, другая расстановка ----
+        public readonly bool Vnutri;
+        public event Action Izmenilos;      // сменилась игра или её состояние — общее окно обновляет шаги
+        public Game Vybrana { get { return list.Selected; } }
+        public List<Game> Igry { get { return games; } }
+        public bool EstVklyuchennye { get { return core.St != null && core.St.On.Count > 0; } }
+        // Общее окно закрывается: то же, что делал OnFormClosing отдельной программы — подбор отменить, середину работы дождаться.
+        public bool VRabote { get { return busy || podborStop != null; } }   // идёт включение или подбор — обновляться нельзя
+        public bool MozhnoZakryt()
         {
-            core = c;
+            if (podborStop != null) { podborStop.Cancel(); return false; }
+            if (busy) { status.Show("Подожди, заканчиваю…", StatusLine.Tone.Info); return false; }
+            return true;
+        }
+        // ограничение для игры включено — такие игры общее окно меряет само (как «Замер в игре» раньше)
+        public bool Vklyuchena(Game g) { return g != null && core.St != null && core.St.On.ContainsKey(g.Key); }
+        Form Hozyain { get { return Vnutri ? (TopLevelControl as Form ?? this) : this; } }
+        int vnW, vnBtnY;
+
+        public MainForm(Core c, bool vnutri = false)
+        {
+            core = c; Vnutri = vnutri;
+            if (Vnutri) { TopLevel = false; ShowInTaskbar = false; }
             using (var gr = CreateGraphics()) Ui.K = gr.DpiX / 96f;
             Func<float, int> S = v => Ui.S(v);
             Text = "Ровный FPS";
@@ -1757,7 +1859,65 @@ namespace RovnyFps
             UpdateButtons();
 
             // необязательное встраивание во вкладку оболочки (Vstraivanie.cs); значка в трее у нас нет
-            Vstraivanie.Podklyuchit(Handle, null);
+            if (!Vnutri)
+            {
+                Vstraivanie.Podklyuchit(Handle, null);
+                Vstraivanie.TemaSmenilas += () => Pokrasit(Vstraivanie.Tema);
+            }
+            else
+            {
+                FormBorderStyle = FormBorderStyle.None;
+                sub.Visible = support.Visible = zhurnal.Visible = vIgre.Visible = false;   // это теперь в общем окне
+                sledit.Stop();                                                            // матчи меряет общее окно
+                section.Text = "СКОЛЬКО FPS ДЕРЖАТЬ"; other.Text = "+ Добавить игру"; ssync.Text = "Убрать разрывы кадра";
+                ssync.AccessibleName = "Убрать разрывы кадра: подгонять кадры под экран (Scanline Sync)";
+            }
+        }
+
+        // Расстановка во встроенном режиме: список игр тянется, всё остальное прижато к низу
+        public void Razlozhit(int w, int h)
+        {
+            if (!Vnutri) return;
+            Func<float, int> S = v => Ui.S(v);
+            SetBounds(Left, Top, w, h); vnW = w;
+            vnBtnY = h - S(44);
+            int yStatus = vnBtnY - S(50), ySsync = yStatus - S(38), yLimit = ySsync - S(46);
+            bool sHint = h >= S(500);
+            int yHint = yLimit - (sHint ? S(38) : 0), ySec = yHint - S(24), yLinks = ySec - S(26);
+            list.SetBounds(0, 0, w, Math.Max(S(60), yLinks - S(8)));
+            other.Location = new Point(0, yLinks);
+            proverka.Text = w >= S(296) ? "Проверить, держит ли игра FPS" : "Проверить FPS";
+            proverka.Location = new Point(w - TextRenderer.MeasureText(proverka.Text, Ui.Small).Width, yLinks);
+            section.Location = new Point(0, ySec);
+            podbor.Location = new Point(w - TextRenderer.MeasureText(podbor.Text, Ui.Small).Width, ySec);
+            hint.Visible = sHint; hint.SetBounds(0, yHint, w, S(36));
+            minus.SetBounds(0, yLimit, S(38), S(38)); value.SetBounds(S(38), yLimit, S(64), S(38)); plus.SetBounds(S(102), yLimit, S(38), S(38));
+            int sw = TextRenderer.MeasureText(ssync.Text, Ui.SmallSemi).Width + S(22);
+            ssync.SetBounds(0, ySsync, sw, S(30)); ssyncChto.SetBounds(sw + S(6), ySsync, S(30), S(30));
+            status.SetBounds(0, yStatus, w, S(46));
+            main.SetBounds(0, vnBtnY, w, S(44));
+            RazlozhitChipy(); UpdateButtons();
+        }
+
+        // быстрые числа — справа в ряду с «− 60 +»; что не влезло — прячем, начиная с больших
+        void RazlozhitChipy()
+        {
+            if (!Vnutri || vnW == 0) return;
+            int x = vnW, levo = plus.Right + Ui.S(10);
+            var vid = new List<Btn>(); int nado = 0;
+            foreach (var c in chips) { if (nado + c.Width + Ui.S(6) > vnW - levo) break; nado += c.Width + Ui.S(6); vid.Add(c); }
+            foreach (var c in chips) c.Visible = vid.Contains(c);
+            for (int i = vid.Count - 1; i >= 0; i--) { x -= vid[i].Width; vid[i].Location = new Point(x, minus.Top + Ui.S(4)); x -= Ui.S(6); }
+        }
+
+        // Тема оболочки пришла или сменилась (null — оболочка отпустила окно): перекраска на лету.
+        // Без оболочки темы нет — вид ровно прежний.
+        public void Pokrasit(TemaObolochki t)
+        {
+            if (IsDisposed) return;
+            var map = Ui.Primenit(t);
+            foreach (Form f in Application.OpenForms) Ui.Perekrasit(f, map);
+            Invalidate(true);
         }
 
         // Вторая копия просит первую показаться: если окно во вкладке оболочки, её откроет оболочка
@@ -1796,6 +1956,7 @@ namespace RovnyFps
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
+            if (Vnutri) return;   // шапку рисует общее окно
             var g = e.Graphics; g.InterpolationMode = InterpolationMode.HighQualityBicubic; g.SmoothingMode = SmoothingMode.AntiAlias;
             if (logo != null) g.DrawImage(logo, Ui.S(22), Ui.S(20), Ui.S(34), Ui.S(34));
             TextRenderer.DrawText(g, "Ровный FPS", Ui.Title, new Point(Ui.S(64), Ui.S(17)), Ui.Txt, Ui.Bg);
@@ -1818,8 +1979,8 @@ namespace RovnyFps
         protected override void OnShown(EventArgs e)
         {
             base.OnShown(e);
-            if (!Loaded) Reload(null);
-            ProveritObnovlenie();
+            if (!Loaded && !Vnutri) Reload(null);   // во встроенном режиме список грузит общее окно
+            if (!Vnutri) ProveritObnovlenie();   // общая программа ещё не выпускалась — обновляться не из чего
         }
 
         async void ProveritObnovlenie()
@@ -1923,6 +2084,7 @@ namespace RovnyFps
                 x += w + Ui.S(6);
             }
             SetFps(fps);
+            RazlozhitChipy();
         }
 
         void UpdateButtons()
@@ -1933,9 +2095,20 @@ namespace RovnyFps
             off.Visible = on;
             main.Width = on ? Ui.S(258) : Ui.S(376);
             off.SetBounds(Ui.S(288), main.Top, Ui.S(110), main.Height);
+            if (Vnutri && vnW > 0)
+            {
+                main.Width = on ? vnW - Ui.S(118) : vnW;
+                off.SetBounds(vnW - Ui.S(110), vnBtnY, Ui.S(110), main.Height);
+                if (podborStop == null && !busy && on) main.Text = vnW >= Ui.S(296) ? "Изменить ограничение" : "Изменить";
+            }
         }
 
         void Refresh2()
+        {
+            try { Refresh2Vnutr(); } finally { if (Izmenilos != null) Izmenilos(); }
+        }
+
+        void Refresh2Vnutr()
         {
             var g = list.Selected;
             bool on = g != null && core.St.On.ContainsKey(g.Key);
@@ -1976,7 +2149,7 @@ namespace RovnyFps
             if (!core.St.ZamerIgr && !Zamer.PmEst)
             {
                 // фоновый замер — только PresentMon: буфер RivaTuner под своим лимитом приукрашивает
-                if (MessageBox.Show(this, "Для замера во время игры нужна бесплатная программа PresentMon от Intel (около 1 МБ, с GitHub).\n\nСкачать PresentMon?",
+                if (MessageBox.Show(Hozyain, "Для замера во время игры нужна бесплатная программа PresentMon от Intel (около 1 МБ, с GitHub).\n\nСкачать PresentMon?",
                         "Ровный FPS", MessageBoxButtons.YesNo, MessageBoxIcon.Information) != DialogResult.Yes) return;
                 status.Show("Скачиваю PresentMon…", StatusLine.Tone.Info);
                 string oshibka = null;
@@ -1995,6 +2168,7 @@ namespace RovnyFps
         // Раз в 3 с: включённая игра запущена — начать замер катки; итог придёт, когда игра закроется
         void SleditZaIgroy()
         {
+            if (Vnutri) return;
             if (!core.St.ZamerIgr || !Zamer.PmEst || games == null) return;
             if (katka != null) { if (katka.Idet) return; katka = null; }
             var g = games.FirstOrDefault(x => core.St.On.ContainsKey(x.Key) && core.Running(x));
@@ -2027,7 +2201,7 @@ namespace RovnyFps
                              : fps < hz ? "− FPS станет " + hz + " вместо твоих " + fps + ": компьютеру нужно больше сил."
                              : "• FPS останется " + hz + ", как сейчас.";
             Zhurnal.Pishi("без разрывов: окно «что это», экран " + hz + " Гц, лимит " + fps);
-            return Okno.Pokazat(this, "Без разрывов", new[] {
+            return Okno.Pokazat(Hozyain, "Без разрывов", new[] {
                     "+ Нет полосы разрыва, когда крутишь камеру.",
                     "+ Кадры выходят ровно под экран " + hz + " Гц.",
                     fpsStroka,
@@ -2060,7 +2234,7 @@ namespace RovnyFps
         {
             using (var d = new OpenFileDialog { Filter = "Игра (*.exe)|*.exe", Title = "Выбери exe игры" })
             {
-                if (d.ShowDialog(this) != DialogResult.OK) return;
+                if (d.ShowDialog(Hozyain) != DialogResult.OK) return;
                 string path = d.FileName, real;
                 // выбрали лаунчер — берём exe самой игры (лимит на лаунчер не подействует)
                 if (Core.LauncherToGame.TryGetValue(Path.GetFileName(path), out real))
@@ -2083,7 +2257,7 @@ namespace RovnyFps
         {
             var g = list.Selected; if (g == null || busy) return;
             // качать чужую программу — только с согласия
-            if (enable && !core.RtssInstalled && MessageBox.Show(this,
+            if (enable && !core.RtssInstalled && MessageBox.Show(Hozyain,
                     "Для лимита нужен RivaTuner Statistics Server — бесплатная программа от Guru3D, её ставят вместе с MSI Afterburner.\n\n" +
                     "Сейчас я скачаю и поставлю его сам, это около минуты. Потом он будет запускаться вместе с Windows и держать лимит.\n\n" +
                     "Поставить RivaTuner?", "Ровный FPS", MessageBoxButtons.YesNo, MessageBoxIcon.Information) != DialogResult.Yes)
@@ -2213,7 +2387,7 @@ namespace RovnyFps
             // точный замер — PresentMon от Intel; качаем только с согласия, один раз
             if (!Zamer.PmEst && !pmOtkaz)
             {
-                if (MessageBox.Show(this, "Для точного замера нужна бесплатная программа PresentMon от Intel (около 1 МБ, с GitHub). " +
+                if (MessageBox.Show(Hozyain, "Для точного замера нужна бесплатная программа PresentMon от Intel (около 1 МБ, с GitHub). " +
                         "Она видит кадры сама, а не через RivaTuner, и заодно мерит задержку от мыши до экрана.\n\nСкачать PresentMon?",
                         "Ровный FPS", MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)
                 {
@@ -2268,7 +2442,7 @@ namespace RovnyFps
         public const string SupportUrl = "https://boosty.to/raketo4ka/donate";
 
         [STAThread]
-        static void Main(string[] args)
+        internal static void Main(string[] args)
         {
             args = Obnovlenie.PosleZapuska(args);   // после обновления: дождаться выхода старой копии
             try { SetProcessDPIAware(); } catch { }
@@ -2282,6 +2456,7 @@ namespace RovnyFps
                 // 5-й ключ bez-rtss — снять окно так, будто RivaTuner не установлен
                 if (args.Length > 3) shotUpdate = int.Parse(args[3]);
                 shotBezRtss = args.Length > 4 && args[4] == "bez-rtss";
+                foreach (var a in args) if (a.StartsWith("tema=")) shotTema = a.Substring(5);
                 Shot(args[1], args.Length > 2 ? int.Parse(args[2]) : 0); return;
             }
 
@@ -2342,6 +2517,7 @@ namespace RovnyFps
 
         static int shotUpdate;
         static bool shotBezRtss;
+        static string shotTema;   // --shot … tema=<id>: снять окно под темой «Коробки» без оболочки
         static void Shot(string png, int select)
         {
             var core = new Core();
@@ -2351,6 +2527,7 @@ namespace RovnyFps
             f.LoadNow(); f.SelectForShot(select);
             f.Show(); Application.DoEvents();
             if (shotUpdate > 0) { f.PokazatObnovlenie(new Obnovlenie.Est { Versiya = shotUpdate }); Application.DoEvents(); }
+            if (shotTema != null) foreach (var id in shotTema.Split('>')) { f.Pokrasit(Ui.ProbnayaTema(id)); Application.DoEvents(); }   // «a>b» — смена на лету
             using (var bmp = new Bitmap(f.Width, f.Height)) { f.DrawToBitmap(bmp, new Rectangle(0, 0, f.Width, f.Height)); bmp.Save(png); }
             f.Close();
         }

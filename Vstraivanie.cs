@@ -14,12 +14,37 @@
 //   if (Vstraivanie.Pokazat()) return;   // окно во вкладке — оболочка откроет её сама
 // Второй запуск программы — перед тем как просить первую копию показаться:
 //   Vstraivanie.RazreshitVperedi();
+// Вид под оболочку (необязательно): оболочка присылает свои цвета, программа перекрашивается сама.
+//   Vstraivanie.TemaSmenilas += () => Pokrasit(Vstraivanie.Tema);   // Tema == null — вернуть свой вид
+//   Цвета — числа 0xRRGGBB: Color.FromArgb(255, Color.FromArgb(tema.Fon)).
 using System;
 using System.Runtime.InteropServices;
+
+/// <summary>Цвета оболочки, в которую встроено окно. Каждый цвет — число 0xRRGGBB.</summary>
+public sealed class TemaObolochki
+{
+    public int Fon;          // фон страницы оболочки: фон окна программы
+    public int Poverhnost;   // карточки, поля, панели поверх фона
+    public int Tekst;        // основной текст
+    public int Vtorichnyy;   // подписи, пояснения
+    public int Akcent;       // главная кнопка, выделение
+    public int NaAkcente;    // текст на главной кнопке
+    public int Liniya;       // разделители и рамки (уже смешана с фоном)
+    public int Vkl, Vykl;    // точки «включено» / «выключено»
+    public int Navedenie;    // подсветка под мышью, выбранная строка
+    public int Radius;       // скругление углов, px при 100 %
+    public bool Temnaya;     // тёмная тема
+}
 
 #if VSTRAIVANIE
 public static class Vstraivanie
 {
+    /// <summary>Цвета оболочки; null — оболочки нет или она их не прислала: вид у программы свой.</summary>
+    public static TemaObolochki Tema { get { return tema; } }
+
+    /// <summary>Оболочка прислала или сменила цвета, либо отпустила окно (тогда Tema == null). В потоке окна.</summary>
+    public static event Action TemaSmenilas;
+
     /// <summary>Программа запущена с флагом --vstroeno (её запустила оболочка).</summary>
     public static readonly bool Flag = EstFlag();
 
@@ -41,8 +66,10 @@ public static class Vstraivanie
         MSG_SPRYACH = RegisterWindowMessage("Vstraivanie.Spryach.v1");
         MSG_OTPUSTI = RegisterWindowMessage("Vstraivanie.Otpusti.v1");
         MSG_POKAZHI = RegisterWindowMessage("Vstraivanie.Pokazhi.v1");
+        MSG_TEMA = RegisterWindowMessage("Vstraivanie.Tema.v1");
         try
         {
+            ChangeWindowMessageFilterEx(hwnd, MSG_TEMA, MSGFLT_ALLOW, IntPtr.Zero);
             // Оболочка может работать с другими правами — иначе её сообщения не дойдут.
             ChangeWindowMessageFilterEx(hwnd, MSG_PRIVET, MSGFLT_ALLOW, IntPtr.Zero);
             ChangeWindowMessageFilterEx(hwnd, MSG_MESTO, MSGFLT_ALLOW, IntPtr.Zero);
@@ -115,7 +142,8 @@ public static class Vstraivanie
     static WINDOWPLACEMENT bylPl;
     static RECT bylRect;
     static bool bylSvernut, bylRazvernut;
-    static uint MSG_PRIVET, MSG_MESTO, MSG_SPRYACH, MSG_OTPUSTI, MSG_POKAZHI;
+    static uint MSG_PRIVET, MSG_MESTO, MSG_SPRYACH, MSG_OTPUSTI, MSG_POKAZHI, MSG_TEMA;
+    static TemaObolochki tema, temaNabor;   // действующая и та, что сейчас приходит по одному значению
     static SUBCLASSPROC proc;   // держим ссылку, чтобы сборщик мусора не забрал делегат
 
     static readonly UIntPtr ID_PODKLASSA = new UIntPtr(0x56535452);
@@ -165,6 +193,7 @@ public static class Vstraivanie
                 if (obolochka != IntPtr.Zero) Otpustit();
                 return new IntPtr(1);
             }
+            if (m != 0 && m == MSG_TEMA) { ZnachenieTemy((int)wp.ToInt64(), (int)lp.ToInt64()); return new IntPtr(1); }
             switch (m)
             {
                 case WM_WINDOWPOSCHANGING:
@@ -228,11 +257,51 @@ public static class Vstraivanie
                     RemoveProp(h, "Vstraivanie.VsyaVysota");
                     RemoveWindowSubclass(h, proc, ID_PODKLASSA);
                     okno = IntPtr.Zero; obolochka = IntPtr.Zero; zhdem = false; vstroeno = false;
+                    tema = null; temaNabor = null;
                     break;
             }
         }
         catch { }
         return DefSubclassProc(h, m, wp, lp);
+    }
+
+    // Тема приходит по одному значению на сообщение: wParam — что это (1…12), lParam — значение;
+    // wParam = 0 — всё пришло, применить. Незнакомые номера пропускаем: оболочка может знать больше нас.
+    static void ZnachenieTemy(int chto, int zn)
+    {
+        if (obolochka == IntPtr.Zero) return;   // цвета шлёт только оболочка, после Privet
+        if (chto == 0)
+        {
+            if (temaNabor == null) return;
+            tema = temaNabor;
+            temaNabor = null;
+            SoobshchitTemu();
+            return;
+        }
+        if (temaNabor == null) temaNabor = new TemaObolochki();
+        TemaObolochki n = temaNabor;
+        switch (chto)
+        {
+            case 1: n.Fon = zn; break;
+            case 2: n.Poverhnost = zn; break;
+            case 3: n.Tekst = zn; break;
+            case 4: n.Vtorichnyy = zn; break;
+            case 5: n.Akcent = zn; break;
+            case 6: n.NaAkcente = zn; break;
+            case 7: n.Liniya = zn; break;
+            case 8: n.Vkl = zn; break;
+            case 9: n.Vykl = zn; break;
+            case 10: n.Radius = zn; break;
+            case 11: n.Temnaya = zn != 0; break;
+            case 12: n.Navedenie = zn; break;
+        }
+    }
+
+    static void SoobshchitTemu()
+    {
+        Action f = TemaSmenilas;
+        if (f == null) return;
+        try { f(); } catch { }
     }
 
     static void Privet(IntPtr o)
@@ -287,14 +356,20 @@ public static class Vstraivanie
         svoy = false;
     }
 
+    // Показывать окно — только через ShowWindow, НЕ флагом SWP_SHOWWINDOW: флаг окно показывает, но не шлёт
+    // ему WM_SHOWWINDOW, а по этому сообщению WinForms и WPF узнают, видно ли окно. «Спрячься» прячет через
+    // ShowWindow (сообщение приходит, WinForms считает окно спрятанным), а показ флагом — без сообщения: окно на
+    // экране, WinForms думает, что оно спрятано, и новым элементам окна Windows не создаёт — раздел пустой.
+    // Проверено 20.11 (storozh-okno, --proba-vynos): после «Вынуть окно из Коробки» внутри было пусто навсегда.
     static void Postavit(bool pokazat)
     {
         svoy = true;
         IntPtr bylDpi = IntPtr.Zero;
         try { bylDpi = SetThreadDpiAwarenessContext(new IntPtr(-4)); } catch { }   // per-monitor v2
         if (IsIconic(okno)) ShowWindow(okno, SW_SHOWNOACTIVATE);
-        SetWindowPos(okno, IntPtr.Zero, mx, my, mw, mh,
-            SWP_NOACTIVATE | SWP_NOZORDER | SWP_FRAMECHANGED | (pokazat ? SWP_SHOWWINDOW : 0));
+        bool pokazyvaem = pokazat && !IsWindowVisible(okno);
+        SetWindowPos(okno, IntPtr.Zero, mx, my, mw, mh, SWP_NOACTIVATE | SWP_NOZORDER | SWP_FRAMECHANGED);
+        if (pokazyvaem) ShowWindow(okno, SW_SHOWNA);   // уже на месте; без фокуса — он может быть в игре
         try { if (bylDpi != IntPtr.Zero) SetThreadDpiAwarenessContext(bylDpi); } catch { }
         svoy = false;
     }
@@ -313,23 +388,32 @@ public static class Vstraivanie
             SetWindowLongPtr(okno, GWLP_HWNDPARENT, bylVladelec);
             SetWindowLong(okno, GWL_STYLE, (GetWindowLong(okno, GWL_STYLE) & ~RAMKA) | (bylStil & RAMKA));
             SetWindowLong(okno, GWL_EXSTYLE, (GetWindowLong(okno, GWL_EXSTYLE) & ~EX_RAMKA) | (bylEx & EX_RAMKA));
+            // Место — пока окно спрятано, показ — через ShowWindow (см. Postavit: иначе WinForms считает окно спрятанным).
             if (bylSvernut)
             {
-                WINDOWPLACEMENT p = bylPl; p.showCmd = SW_SHOWMINNOACTIVE; SetWindowPlacement(okno, ref p);
+                WINDOWPLACEMENT p = bylPl; p.showCmd = SW_HIDE; SetWindowPlacement(okno, ref p);
+                ShowWindow(okno, SW_SHOWMINNOACTIVE);
             }
             else if (bylRazvernut)
             {
-                WINDOWPLACEMENT p = bylPl; p.showCmd = vidno ? SW_SHOWMAXIMIZED : SW_HIDE; SetWindowPlacement(okno, ref p);
+                WINDOWPLACEMENT p = bylPl; p.showCmd = SW_HIDE; SetWindowPlacement(okno, ref p);
+                if (vidno) ShowWindow(okno, SW_SHOWMAXIMIZED);
             }
             else
+            {
                 SetWindowPos(okno, IntPtr.Zero, bylRect.l, bylRect.t, bylRect.r - bylRect.l, bylRect.b - bylRect.t,
-                    SWP_NOACTIVATE | SWP_NOZORDER | SWP_FRAMECHANGED | (vidno ? SWP_SHOWWINDOW : 0));
+                    SWP_NOACTIVATE | SWP_NOZORDER | SWP_FRAMECHANGED);
+                if (vidno) ShowWindow(okno, SW_SHOWNA);
+            }
             Perehody(false);
             svoy = false;
         }
         obolochka = IntPtr.Zero;
         zhdem = false;
         Trey(true);
+        // Без оболочки вид у программы снова свой.
+        temaNabor = null;
+        if (tema != null) { tema = null; SoobshchitTemu(); }
         // С флагом окно ждало оболочку спрятанным, а она отпустила его (или пропала) раньше первого
         // Mesto — как без оболочки за 15 с: показать, иначе окно так и останется невидимым.
         if (Flag && neStoyalo) PokazatBezFokusa();
@@ -424,6 +508,10 @@ public static class Vstraivanie
 {
     public static readonly bool Flag = false;
     public static bool VObolochke { get { return false; } }
+    public static TemaObolochki Tema { get { return null; } }
+#pragma warning disable 67
+    public static event Action TemaSmenilas;
+#pragma warning restore 67
     public static void Podklyuchit(IntPtr hwnd, Action<bool> trey, bool vsyaVysota = false) { if (trey != null) trey(true); }
     public static bool Pokazat() { return false; }
     public static void RazreshitVperedi() { }
